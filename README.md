@@ -6,7 +6,7 @@ Create Struct with ̀`let pml = pml::parse_file("file_name")` and get values wit
 Save the data in `file_name.pml` in the format
 
 ```
-key1=TestString
-key2=1.41
-key3=69
+TestString=Hello World
+testFloat=1.41
+test_integer=69
 ```
