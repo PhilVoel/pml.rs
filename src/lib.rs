@@ -2,7 +2,7 @@ use std::fs;
 use std::collections::HashMap;
 
 pub struct PmlStruct {
-    elements: HashMap<String, PmlElem>
+    elements: Option<HashMap<String, PmlElem>>
 }
 
 enum PmlElem {
@@ -13,21 +13,21 @@ enum PmlElem {
 
 impl PmlStruct {
     pub fn get_string(&self, key: &str) -> &str {
-        match self.elements.get(key) {
+        match self.elements.as_ref().unwrap().get(key) {
             Some(PmlElem::PmlString(s)) => s,
             _ => panic!("Not a string")
         }
     }
 
     pub fn get_int(&self, key: &str) -> &i64 {
-        match self.elements.get(key) {
+        match self.elements.as_ref().unwrap().get(key) {
             Some(PmlElem::PmlInt(i)) => i,
             _ => panic!("Not an int")
         }
     }
 
     pub fn get_float(&self, key: &str) -> &f64 {
-        match self.elements.get(key) {
+        match self.elements.as_ref().unwrap().get(key) {
             Some(PmlElem::PmlFloat(f)) => f,
             _ => panic!("Not a float")
         }
@@ -49,20 +49,20 @@ fn get_lines(file: String) -> Vec<String> {
 }
 
 fn parse_lines(lines: Vec<String>) -> PmlStruct {
-    let mut elements: HashMap<String, PmlElem> = HashMap::new();
+    let mut elements_map: HashMap<String, PmlElem> = HashMap::new();
     for line in lines {
         let (key, value) = line.split_once("=").unwrap();
         if let Ok(num) = value.parse::<i64>() {
-            elements.insert(key.to_string(), PmlElem::PmlInt(num));
+            elements_map.insert(key.to_string(), PmlElem::PmlInt(num));
         } else if let Ok(num) = value.parse::<f64>() {
-            elements.insert(key.to_string(), PmlElem::PmlFloat(num));
+            elements_map.insert(key.to_string(), PmlElem::PmlFloat(num));
         } else {
-            elements.insert(key.to_string(), PmlElem::PmlString(value.to_string()));
+            elements_map.insert(key.to_string(), PmlElem::PmlString(value.to_string()));
         }
     }
-    PmlStruct {elements}
+    PmlStruct {elements: Some(elements_map)}
 }
 
-pub fn new() -> PmlStruct {
-    PmlStruct {elements: HashMap::new()}
+pub const fn new() -> PmlStruct {
+    PmlStruct {elements: None}
 }
