@@ -62,3 +62,7 @@ fn parse_lines(lines: Vec<String>) -> PmlStruct {
     }
     PmlStruct {elements}
 }
+
+pub fn new() -> PmlStruct {
+    PmlStruct {elements: HashMap::new()}
+}
