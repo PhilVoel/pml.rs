@@ -9,7 +9,8 @@ enum PmlElem {
     PmlString(String),
     PmlInt(i64),
     PmlUnsigned(u64),
-    PmlFloat(f64)
+    PmlFloat(f64), 
+    PmlBool(bool)
 }
 
 impl PmlStruct {
@@ -17,6 +18,13 @@ impl PmlStruct {
         match self.elements.as_ref().unwrap().get(key) {
             Some(PmlElem::PmlString(s)) => s,
             _ => panic!("Not a string")
+        }
+    }
+
+    pub fn get_bool(&self, key: &str) -> &bool {
+        match self.elements.as_ref().unwrap().get(key) {
+            Some(PmlElem::PmlBool(b)) => b,
+            _ => panic!("Not a bool")
         }
     }
 
@@ -66,6 +74,8 @@ fn parse_lines(lines: Vec<String>) -> PmlStruct {
             elements_map.insert(key.to_string(), PmlElem::PmlInt(num));
         } else if let Ok(num) = value.parse::<f64>() {
             elements_map.insert(key.to_string(), PmlElem::PmlFloat(num));
+        } else if let Ok(bool) = value.parse::<bool>() {
+            elements_map.insert(key.to_string(), PmlElem::PmlBool(bool));
         } else {
             elements_map.insert(key.to_string(), PmlElem::PmlString(value.to_string()));
         }
