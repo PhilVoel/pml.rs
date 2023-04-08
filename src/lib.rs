@@ -8,6 +8,7 @@ pub struct PmlStruct {
 enum PmlElem {
     PmlString(String),
     PmlInt(i64),
+    PmlUnsigned(u64),
     PmlFloat(f64)
 }
 
@@ -16,6 +17,13 @@ impl PmlStruct {
         match self.elements.as_ref().unwrap().get(key) {
             Some(PmlElem::PmlString(s)) => s,
             _ => panic!("Not a string")
+        }
+    }
+
+    pub fn get_unsigned(&self, key: &str) -> &u64 {
+        match self.elements.as_ref().unwrap().get(key) {
+            Some(PmlElem::PmlUnsigned(i)) => i,
+            _ => panic!("Not an unsigned")
         }
     }
 
@@ -52,7 +60,9 @@ fn parse_lines(lines: Vec<String>) -> PmlStruct {
     let mut elements_map: HashMap<String, PmlElem> = HashMap::new();
     for line in lines {
         let (key, value) = line.split_once("=").unwrap();
-        if let Ok(num) = value.parse::<i64>() {
+        if let Ok(num) = value.parse::<u64>() {
+            elements_map.insert(key.to_string(), PmlElem::PmlUnsigned(num));
+        } else if let Ok(num) = value.parse::<i64>() {
             elements_map.insert(key.to_string(), PmlElem::PmlInt(num));
         } else if let Ok(num) = value.parse::<f64>() {
             elements_map.insert(key.to_string(), PmlElem::PmlFloat(num));
