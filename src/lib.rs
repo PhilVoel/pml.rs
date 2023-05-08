@@ -3,17 +3,21 @@ use std::collections::HashMap;
 mod parse;
 pub use parse::parse_file;
 
+mod elem {
+    pub enum PmlElem {
+        PmlString(String),
+        PmlInt(i64),
+        PmlUnsigned(u64),
+        PmlFloat(f64), 
+        PmlBool(bool)
+    }
+}
+
+use elem::PmlElem;
 pub struct PmlStruct {
     elements: Option<HashMap<String, PmlElem>>
 }
 
-enum PmlElem {
-    PmlString(String),
-    PmlInt(i64),
-    PmlUnsigned(u64),
-    PmlFloat(f64), 
-    PmlBool(bool)
-}
 
 
 impl<'a> PmlStruct {
