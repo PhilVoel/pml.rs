@@ -15,10 +15,6 @@ enum PmlElem {
     PmlBool(bool)
 }
 
-pub const fn new() -> PmlStruct {
-    PmlStruct {elements: None}
-}
-
 impl PmlStruct {
     pub fn get_string(&self, key: &str) -> &str {
         match self.elements.as_ref().unwrap().get(key) {
