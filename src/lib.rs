@@ -15,38 +15,56 @@ enum PmlElem {
     PmlBool(bool)
 }
 
-impl PmlStruct {
-    pub fn get_string(&self, key: &str) -> &str {
-        match self.elements.as_ref().unwrap().get(key) {
-            Some(PmlElem::PmlString(s)) => s,
+
+impl<'a> PmlStruct {
+    pub fn get<'b, T>(&'a self, key: &'b str) -> &'a T
+        where
+        &'a T: From<&'a PmlElem>
+        {
+            self.elements.as_ref().unwrap().get(key).unwrap().try_into().unwrap()
+        }
+}
+
+impl<'a> From<&'a PmlElem> for &'a str {
+    fn from(elem: &'a PmlElem) -> Self {
+        match elem {
+            PmlElem::PmlString(s) => s,
             _ => panic!("Not a string")
         }
     }
+}
 
-    pub fn get_bool(&self, key: &str) -> &bool {
-        match self.elements.as_ref().unwrap().get(key) {
-            Some(PmlElem::PmlBool(b)) => b,
+impl<'a> From<&'a PmlElem> for &'a bool {
+    fn from(elem: &'a PmlElem) -> Self {
+        match elem {
+            PmlElem::PmlBool(b) => b,
             _ => panic!("Not a bool")
         }
     }
+}
 
-    pub fn get_unsigned(&self, key: &str) -> &u64 {
-        match self.elements.as_ref().unwrap().get(key) {
-            Some(PmlElem::PmlUnsigned(i)) => i,
-            _ => panic!("Not an unsigned")
-        }
-    }
-
-    pub fn get_int(&self, key: &str) -> &i64 {
-        match self.elements.as_ref().unwrap().get(key) {
-            Some(PmlElem::PmlInt(i)) => i,
+impl<'a> From<&'a PmlElem> for &'a i64 {
+    fn from(elem: &'a PmlElem) -> Self {
+        match elem {
+            PmlElem::PmlInt(i) => i,
             _ => panic!("Not an int")
         }
     }
+}
 
-    pub fn get_float(&self, key: &str) -> &f64 {
-        match self.elements.as_ref().unwrap().get(key) {
-            Some(PmlElem::PmlFloat(f)) => f,
+impl<'a> From<&'a PmlElem> for &'a u64 {
+    fn from(elem: &'a PmlElem) -> Self {
+        match elem {
+            PmlElem::PmlUnsigned(u) => u,
+            _ => panic!("Not an unsigned int")
+        }
+    }
+}
+
+impl<'a> From<&'a PmlElem> for &'a f64 {
+    fn from(elem: &'a PmlElem) -> Self {
+        match elem {
+            PmlElem::PmlFloat(f) => f,
             _ => panic!("Not a float")
         }
     }
