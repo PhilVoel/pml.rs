@@ -26,4 +26,12 @@ impl<'a> PmlStruct {
         {
             self.elements.as_ref().unwrap().get(key).unwrap().try_into().unwrap()
         }
+    
+    pub fn add<T>(&mut self, key: String, elem: T)
+        where
+        T: Into<PmlElem>
+        {
+            self.elements.as_mut().unwrap().insert(key, elem.into());
+        }
 }
+

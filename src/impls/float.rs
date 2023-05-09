@@ -8,3 +8,9 @@ impl<'a> From<&'a PmlElem> for &'a f64 {
         }
     }
 }
+
+impl Into<PmlElem> for f64 {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlFloat(self)
+    }
+}

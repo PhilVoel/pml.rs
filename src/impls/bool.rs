@@ -8,3 +8,9 @@ impl<'a> From<&'a PmlElem> for &'a bool {
         }
     }
 }
+
+impl Into<PmlElem> for bool {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlBool(self)
+    }
+}

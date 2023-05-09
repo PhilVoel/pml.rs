@@ -8,3 +8,9 @@ impl<'a> From<&'a PmlElem> for &'a String {
         }
     }
 }
+
+impl Into<PmlElem> for String {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlString(self)
+    }
+}

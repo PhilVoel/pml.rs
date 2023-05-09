@@ -8,3 +8,9 @@ impl<'a> From<&'a PmlElem> for &'a u64 {
         }
     }
 }
+
+impl Into<PmlElem> for u64 {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlUnsigned(self)
+    }
+}
