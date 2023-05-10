@@ -7,8 +7,8 @@ pub use parse::parse_file;
 mod elem {
     pub enum PmlElem {
         PmlString(String),
-        PmlInt(i64),
-        PmlUnsigned(u64),
+        PmlInt(i128),
+        PmlUnsigned(u128),
         PmlFloat(f64), 
         PmlBool(bool)
     }

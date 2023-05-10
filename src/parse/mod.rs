@@ -27,9 +27,9 @@ pub fn parse_lines(lines: Vec<String>) -> PmlStruct {
         if check_type::string(value) {
             elements_map.insert(key.to_string(), PmlElem::PmlString(value[1..value.len()-1].replace("\\\"", "\"").to_string()));
         } else if check_type::int(value) {
-            elements_map.insert(key.to_string(), PmlElem::PmlInt(value.parse::<i64>().unwrap()));
+            elements_map.insert(key.to_string(), PmlElem::PmlInt(value.parse::<i128>().unwrap()));
         } else if check_type::unsigned(value) {
-            elements_map.insert(key.to_string(), PmlElem::PmlUnsigned(value.parse::<u64>().unwrap_or_else(|_| value[10..].trim().parse::<u64>().unwrap())));
+            elements_map.insert(key.to_string(), PmlElem::PmlUnsigned(value.parse::<u128>().unwrap_or_else(|_| value[10..].trim().parse::<u128>().unwrap())));
         } else if check_type::float(value) {
             elements_map.insert(key.to_string(), PmlElem::PmlFloat(value.parse::<f64>().unwrap()));
         } else if check_type::bool(value) {

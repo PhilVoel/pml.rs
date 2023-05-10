@@ -1,6 +1,6 @@
 use crate::PmlElem;
 
-impl<'a> From<&'a PmlElem> for &'a u64 {
+impl<'a> From<&'a PmlElem> for &'a u128 {
     fn from(elem: &'a PmlElem) -> Self {
         match elem {
             PmlElem::PmlUnsigned(u) => u,
@@ -9,7 +9,7 @@ impl<'a> From<&'a PmlElem> for &'a u64 {
     }
 }
 
-impl Into<PmlElem> for u64 {
+impl Into<PmlElem> for u128 {
     fn into(self) -> PmlElem {
         PmlElem::PmlUnsigned(self)
     }
