@@ -14,3 +14,27 @@ impl Into<PmlElem> for u128 {
         PmlElem::PmlUnsigned(self)
     }
 }
+
+impl Into<PmlElem> for u64 {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlUnsigned(self.into())
+    }
+}
+
+impl Into<PmlElem> for u32 {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlUnsigned(self.into())
+    }
+}
+
+impl Into<PmlElem> for u16 {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlUnsigned(self.into())
+    }
+}
+
+impl Into<PmlElem> for u8 {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlUnsigned(self.into())
+    }
+}

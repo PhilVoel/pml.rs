@@ -14,3 +14,9 @@ impl Into<PmlElem> for f64 {
         PmlElem::PmlFloat(self)
     }
 }
+
+impl Into<PmlElem> for f32 {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlFloat(self.into())
+    }
+}

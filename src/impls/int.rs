@@ -14,3 +14,27 @@ impl Into<PmlElem> for i128 {
         PmlElem::PmlInt(self)
     }
 }
+
+impl Into<PmlElem> for i64 {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlInt(self.into())
+    }
+}
+
+impl Into<PmlElem> for i32 {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlInt(self.into())
+    }
+}
+
+impl Into<PmlElem> for i16 {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlInt(self.into())
+    }
+}
+
+impl Into<PmlElem> for i8 {
+    fn into(self) -> PmlElem {
+        PmlElem::PmlInt(self.into())
+    }
+}
