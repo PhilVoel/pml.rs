@@ -5,8 +5,16 @@ use crate::{PmlElem, PmlStruct};
 mod check_type;
 
 pub fn parse_file(file: &str) -> PmlStruct {
-    let lines = get_lines(String::from(file) + ".pml");
-    parse_lines(lines)
+    parse_lines(
+        get_lines({
+            if file.ends_with(".pml") {
+                String::from(file)
+            }
+            else {
+                String::from(file) + ".pml"
+            }
+        })
+    )
 }
 
 fn get_lines(file: String) -> Vec<String> {
