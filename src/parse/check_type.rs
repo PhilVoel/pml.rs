@@ -7,7 +7,7 @@ pub fn int(value: &str) -> bool {
 }
 
 pub fn unsigned(mut value: &str) -> bool {
-    if value.starts_with("(unsigned)") {
+    if value.starts_with("(u)") {
         value = value[10..].trim();
     }
     value.parse::<u128>().is_ok()
