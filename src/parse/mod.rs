@@ -47,7 +47,7 @@ fn parse_lines(lines: Vec<String>) -> Result<PmlStruct, Error> {
     for (name, inc_str) in &incomplete_strings {
         let mut names = vec![name];
         if check_circular_depedencies(&mut names, inc_str , &incomplete_strings) {
-            return Err(Error::CircularDependency(names.iter().map(|s| s.to_string()).collect()));
+            return Err(Error::CircularDependency(names.iter().map(|s| (*s).to_string()).collect()));
         }
     }
     while !incomplete_strings.is_empty() {
