@@ -1,37 +1,69 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, io::Error as IoError, num::{ParseFloatError, ParseIntError}};
 
 mod impls;
-mod parse;
-pub use parse::parse_file;
+pub mod parse;
 
 mod elem {
-    pub enum PmlElem {
+    use crate::parse::StringState;
+    #[derive(Debug, Clone)]
+    pub enum Element {
+        IncompleteString(Vec<(String, StringState)>),
         PmlString(String),
-        PmlInt(i128),
-        PmlUnsigned(u128),
-        PmlFloat(f64), 
-        PmlBool(bool)
+        PmlBool(bool),
+        PmlI128(i128),
+        PmlI64(i64),
+        PmlI32(i32),
+        PmlI16(i16),
+        PmlI8(i8),
+        PmlU128(u128),
+        PmlU64(u64),
+        PmlU32(u32),
+        PmlU16(u16),
+        PmlU8(u8),
+        PmlF64(f64),
+        PmlF32(f32)
     }
 }
-use elem::PmlElem;
+use elem::Element;
 
 pub struct PmlStruct {
-    elements: Option<HashMap<String, PmlElem>>
+    elements: HashMap<String, Element>
+}
+
+#[derive(Debug)]
+pub enum Error {
+    AlreadyExists {
+        key: String,
+        old_val: Element,
+        new_val: Element
+    },
+    CircularDependency(Vec<String>),
+    FileAccess(IoError),
+    Parse,
+    ParseIntError(ParseIntError),
+    ParseFloatError(ParseFloatError),
+    UnknownTypeForced{
+        key: String,
+        type_name: String
+    }
 }
 
 impl<'a> PmlStruct {
-    pub fn get<'b, T>(&'a self, key: &'b str) -> &'a T
+    pub fn get<T>(&'a self, key: &str) -> Option<T>
         where
-        &'a T: From<&'a PmlElem>
+        T: From<&'a Element>
         {
-            self.elements.as_ref().unwrap().get(key).unwrap().try_into().unwrap()
+            self.elements.get(key).map(|elem| T::from(elem))
         }
-    
-    pub fn add<T>(&mut self, key: String, elem: T)
+
+    pub fn add<T>(&mut self, key: String, elem: T) -> Result<(), Error>
         where
-        T: Into<PmlElem>
+        T: Into<Element> + Clone
         {
-            self.elements.as_mut().unwrap().insert(key, elem.into());
+            match self.elements.insert(key.clone(), elem.clone().into()) {
+            Some(old_val) => Err(Error::AlreadyExists{key, old_val, new_val:elem.into()}),
+                None => Ok(())
+            }
         }
 }
 

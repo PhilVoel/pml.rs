@@ -1,22 +1,51 @@
-use crate::PmlElem;
+use crate::Element;
 
-impl<'a> From<&'a PmlElem> for &'a f64 {
-    fn from(elem: &'a PmlElem) -> Self {
+impl<'a> From<&'a Element> for &'a f64 {
+    fn from(elem: &'a Element) -> Self {
         match elem {
-            PmlElem::PmlFloat(f) => f,
+            Element::PmlF64(f) => f,
             _ => panic!("Not a float")
         }
     }
 }
 
-impl Into<PmlElem> for f64 {
-    fn into(self) -> PmlElem {
-        PmlElem::PmlFloat(self)
+#[allow(clippy::cast_lossless)]
+impl From<&Element> for f64 {
+    fn from(elem: &Element) -> Self {
+        match elem {
+            Element::PmlF64(f) => *f,
+            Element::PmlF32(f) => *f as f64,
+            _ => panic!("Not a float")
+        }
     }
 }
 
-impl Into<PmlElem> for f32 {
-    fn into(self) -> PmlElem {
-        PmlElem::PmlFloat(self.into())
+impl From<&Element> for f32 {
+    fn from(elem: &Element) -> Self {
+        match elem {
+            Element::PmlF32(f) => *f,
+            _ => panic!("Not a float")
+        }
+    }
+}
+
+impl<'a> From<&'a Element> for &'a f32 {
+    fn from(elem: &'a Element) -> Self {
+        match elem {
+            Element::PmlF32(f) => f,
+            _ => panic!("Not a float")
+        }
+    }
+}
+
+impl From<f64> for Element {
+    fn from(f: f64) -> Self {
+        Element::PmlF64(f)
+    }
+}
+
+impl From<f32> for Element {
+    fn from(f: f32) -> Self {
+        Element::PmlF32(f)
     }
 }

@@ -1,16 +1,25 @@
-use crate::PmlElem;
+use crate::Element;
 
-impl<'a> From<&'a PmlElem> for &'a bool {
-    fn from(elem: &'a PmlElem) -> Self {
+impl<'a> From<&'a Element> for &'a bool {
+    fn from(elem: &'a Element) -> Self {
         match elem {
-            PmlElem::PmlBool(b) => b,
+            Element::PmlBool(b) => b,
             _ => panic!("Not a bool")
         }
     }
 }
 
-impl Into<PmlElem> for bool {
-    fn into(self) -> PmlElem {
-        PmlElem::PmlBool(self)
+impl From<&Element> for bool {
+    fn from(elem: &Element) -> Self {
+        match elem {
+            Element::PmlBool(b) => *b,
+            _ => panic!("Not a bool")
+        }
+    }
+}
+
+impl From<bool> for Element {
+    fn from(b: bool) -> Self {
+        Element::PmlBool(b)
     }
 }
