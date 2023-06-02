@@ -19,6 +19,10 @@ impl From<&Element> for i128 {
             Element::PmlI32(i) => *i as Self,
             Element::PmlI16(i) => *i as Self,
             Element::PmlI8(i) => *i as Self,
+            Element::PmlU64(u) => *u as Self,
+            Element::PmlU32(u) => *u as Self,
+            Element::PmlU16(u) => *u as Self,
+            Element::PmlU8(u) => *u as Self,
             _ => panic!("Not an int")
         }
     }
@@ -41,6 +45,9 @@ impl From<&Element> for i64 {
             Element::PmlI32(i) => *i as Self,
             Element::PmlI16(i) => *i as Self,
             Element::PmlI8(i) => *i as Self,
+            Element::PmlU32(u) => *u as Self,
+            Element::PmlU16(u) => *u as Self,
+            Element::PmlU8(u) => *u as Self,
             _ => panic!("Not an int")
         }
     }
@@ -62,6 +69,8 @@ impl From<&Element> for i32 {
             Element::PmlI32(i) => *i,
             Element::PmlI16(i) => *i as Self,
             Element::PmlI8(i) => *i as Self,
+            Element::PmlU16(u) => *u as Self,
+            Element::PmlU8(u) => *u as Self,
             _ => panic!("Not an int")
         }
     }
@@ -82,6 +91,7 @@ impl From<&Element> for i16 {
         match elem {
             Element::PmlI16(i) => *i,
             Element::PmlI8(i) => *i as Self,
+            Element::PmlU8(u) => *u as Self,
             _ => panic!("Not an int")
         }
     }
