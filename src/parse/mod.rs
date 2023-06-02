@@ -147,11 +147,11 @@ fn convert_to_pmlelem(value: &str, key: String) -> Result<Element, Error> {
     } else if let Some(stripped) = value.strip_prefix('(') {
         let (force_type, val) = stripped.split_once(')').ok_or(Error::Parse)?;
         match force_type.trim() {
-            "i8" => Ok(val.trim().parse::<i8>()?.into()),
-            "i16" => Ok(val.trim().parse::<i16>()?.into()),
-            "i32" => Ok(val.trim().parse::<i32>()?.into()),
-            "i64" => Ok(val.trim().parse::<i64>()?.into()),
-            "i128" => Ok(val.trim().parse::<i128>()?.into()),
+            "s8" => Ok(val.trim().parse::<i8>()?.into()),
+            "s16" => Ok(val.trim().parse::<i16>()?.into()),
+            "s32" => Ok(val.trim().parse::<i32>()?.into()),
+            "s64" => Ok(val.trim().parse::<i64>()?.into()),
+            "s128" => Ok(val.trim().parse::<i128>()?.into()),
             "u8" => Ok(val.trim().parse::<u8>()?.into()),
             "u16" => Ok(val.trim().parse::<u16>()?.into()),
             "u32" => Ok(val.trim().parse::<u32>()?.into()),
