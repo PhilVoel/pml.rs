@@ -46,7 +46,17 @@ fn parse_lines(lines: Vec<String>) -> Result<PmlStruct, Error> {
     }
     for (name, inc_str) in &incomplete_strings {
         let mut names = vec![name];
-        if check_circular_depedencies(&mut names, inc_str , &incomplete_strings) {
+        let dependencies: Vec<&String> = inc_str.iter().filter(|(_,state)| *state==StringState::Variable).map(|(val,_)| val).collect();
+        for dependency in &dependencies {
+            match elements.get(*dependency) {
+                Some(_) => (),
+                None => match incomplete_strings.get(*dependency) {
+                    Some(_) => (),
+                    None => return Err(Error::UnfulfilledDependency{key: String::from(name), dependency: String::from(*dependency)})
+                }
+            }
+        }
+        if check_circular_depedencies(&mut names, dependencies , &incomplete_strings) {
             return Err(Error::CircularDependency(names.iter().map(|s| (*s).to_string()).collect()));
         }
     }
@@ -83,8 +93,7 @@ fn parse_lines(lines: Vec<String>) -> Result<PmlStruct, Error> {
     Ok(PmlStruct {elements})
 }
 
-fn check_circular_depedencies<'a>(names: &mut Vec<&'a String>, dependencies: &'a [(String, StringState)], incomplete_strings: &'a HashMap<String, Vec<(String, StringState)>>) -> bool {
-    let dependencies: Vec<&String> = dependencies.iter().filter(|(_,state)| *state==StringState::Variable).map(|(val,_)| val).collect();
+fn check_circular_depedencies<'a>(names: &mut Vec<&'a String>, dependencies: Vec<&'a String>, incomplete_strings: &'a HashMap<String, Vec<(String, StringState)>>) -> bool {
     for dependency in dependencies {
         if names.contains(&dependency) {
             return true;
@@ -93,7 +102,8 @@ fn check_circular_depedencies<'a>(names: &mut Vec<&'a String>, dependencies: &'a
             None => (),
             Some(vec) => {
                 names.push(dependency);
-                if check_circular_depedencies(names, vec, incomplete_strings) {
+                let dependencies: Vec<&String> = vec.iter().filter(|(_,state)| *state==StringState::Variable).map(|(val,_)| val).collect();
+                if check_circular_depedencies(names, dependencies, incomplete_strings) {
                     return true;
                 }
             }

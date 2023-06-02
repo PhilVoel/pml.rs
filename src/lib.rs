@@ -39,6 +39,10 @@ pub enum Error {
     },
     CircularDependency(Vec<String>),
     FileAccess(IoError),
+    UnfulfilledDependency{
+        key: String,
+        dependency: String
+    },
     Parse,
     ParseIntError(ParseIntError),
     ParseFloatError(ParseFloatError),
