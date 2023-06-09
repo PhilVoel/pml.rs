@@ -5,7 +5,7 @@ Currently under development, so don't expect full functionality until version 1.
 
 ## Code example
 
-*.js
+*.rs
 
 ```rust
 use pml::parse::file as pml_parse;
@@ -23,16 +23,6 @@ fn main() {
 			}
 		}
 	}
-}
-const pmlResult = pmlParser("testFile.pml");
-if(!pmlResult.successful)
-    console.log(pmlResult.error);
-else {
-    const result = pmlResult.result;
-    if(result.stayAnonymous)
-        console.log("I won't tell you anything about me.");
-    else
-        console.log("Hi, my name is " + result.name + " and I am " + result.age + " years old.");
 }
 ```
 
