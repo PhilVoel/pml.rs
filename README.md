@@ -37,7 +37,7 @@ stayAnonymous = true
 
 ```
 
-Note that you can have strings consist of other values (It wouldn't even have to have been other strings; I could have added the age as part of the name, too!).
-Numbers and booleans are recognized as such and numbers are saved as the most memory efficient type.
-Whitespaces between keys, values, the equal sign and the different parts of strings do not matter at all.
+Note that you can have strings consist of other values (It wouldn't even have to have been other strings; I could have added the age as part of the name, too!).\
+Numbers and booleans are recognized as such and numbers are saved as the most memory efficient type.\
+Whitespaces between keys, values, the equal sign and the different parts of strings do not matter at all.\
 You can get the values either as a copy/clone or as reference. If you copy/clone them you can upcast numbers to a bigger type and everything can be converted to a String.
