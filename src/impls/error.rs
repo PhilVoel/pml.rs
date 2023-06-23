@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::{Error, ParseNumberError};
 use std::num::{ParseIntError, ParseFloatError};
 
 impl From<std::io::Error> for Error {
@@ -7,13 +7,13 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<ParseIntError> for Error {
+impl From<ParseIntError> for ParseNumberError {
     fn from(e: ParseIntError) -> Self {
-        Error::ParseIntError(e)
+        ParseNumberError::Int(e)
     }
 }
-impl From<ParseFloatError> for Error {
+impl From<ParseFloatError> for ParseNumberError {
     fn from(e: ParseFloatError) -> Self {
-        Error::ParseFloatError(e)
+        ParseNumberError::Float(e)
     }
 }

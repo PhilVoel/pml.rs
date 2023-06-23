@@ -1,6 +1,6 @@
 use std::fs;
-use std::collections::HashMap;
-use crate::{Element, PmlStruct, Error};
+use std::collections::{HashMap, HashSet};
+use crate::{Element, PmlStruct, Error, ParseNumberError};
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum TextState {
@@ -173,7 +173,7 @@ fn parse_string(string: String) -> Result<PmlStruct, Error> {
                 state = Value(Number(Unsigned));
                 value.push(c);
             }
-            (ValueStart, c @ ('b'|'f')) => {
+            (ValueStart, c @ ('t'|'f')) => {
                 state = Value(Bool);
                 value.push(c);
             }
@@ -331,9 +331,36 @@ fn parse_string(string: String) -> Result<PmlStruct, Error> {
             }
             (Value(Number(_)), '_') => (),
             (Value(Number(t)), ',') => {
-                elements.insert(key, get_number_from_string(*t, value)?);
+                let num = match get_number_from_string(*t, &value){
+                    Ok(n) => n,
+                    Err(e) => return Err(Error::ParseNumberError {
+                        line: line_counter,
+                        value,
+                        error: e
+                    })
+                };
+                elements.insert(key, num);
                 key = String::new();
                 value = String::new();
+                state = KeyStart;
+            }
+            (Value(Number(t)), c) if c.is_whitespace() => {
+                let num = match get_number_from_string(*t, &value){
+                    Ok(n) => n,
+                    Err(e) => return Err(Error::ParseNumberError {
+                        line: line_counter,
+                        value,
+                        error: e
+                    })
+                };
+                elements.insert(key, num);
+                key = String::new();
+                value = String::new();
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+                state = ValueDone;
             }
             (Value(Number(_)), c) => return Err(Error::IllegalCharacter {
                 char: c,
@@ -442,7 +469,15 @@ fn parse_string(string: String) -> Result<PmlStruct, Error> {
             }),
             (Value(Forced(_)), c) if c.is_ascii_digit() => value.push(c),
             (Value(Forced(f)), c) if c.is_whitespace() => {
-                elements.insert(key, get_number_from_forced(*f, value)?);
+                let num = match get_number_from_forced(*f, &value){
+                    Ok(n) => n,
+                    Err(e) => return Err(Error::ParseNumberError {
+                        line: line_counter,
+                        value,
+                        error: e
+                    })
+                };
+                elements.insert(key, num);
                 key = String::new();
                 value = String::new();
                 state = ValueDone;
@@ -466,10 +501,10 @@ fn parse_string(string: String) -> Result<PmlStruct, Error> {
             })
         }
     }
-
     for (name, inc_str) in &incomplete_strings {
-        let mut names = vec![name];
-        let dependencies: Vec<&String> = inc_str.iter().filter(|(state, _)| *state==TextState::Variable).map(|(_, val)| val).collect();
+        let mut names = HashSet::new();
+        names.insert(name);
+        let dependencies: HashSet<&String> = inc_str.iter().filter(|(state, _)| *state==TextState::Variable).map(|(_, val)| val).collect();
         for dependency in &dependencies {
             match elements.get(*dependency) {
                 Some(_) => (),
@@ -516,7 +551,7 @@ fn parse_string(string: String) -> Result<PmlStruct, Error> {
     Ok(PmlStruct {elements})
 }
 
-fn check_circular_depedencies<'a>(names: &mut Vec<&'a String>, dependencies: Vec<&'a String>, incomplete_strings: &'a HashMap<String, Vec<(TextState, String)>>) -> bool {
+fn check_circular_depedencies<'a>(names: &mut HashSet<&'a String>, dependencies: HashSet<&'a String>, incomplete_strings: &'a HashMap<String, Vec<(TextState, String)>>) -> bool {
     for dependency in dependencies {
         if names.contains(&dependency) {
             return true;
@@ -524,8 +559,8 @@ fn check_circular_depedencies<'a>(names: &mut Vec<&'a String>, dependencies: Vec
         match incomplete_strings.get(dependency) {
             None => (),
             Some(vec) => {
-                names.push(dependency);
-                let dependencies: Vec<&String> = vec.iter().filter(|(state, _)| *state==TextState::Variable).map(|(_, val)| val).collect();
+                names.insert(dependency);
+                let dependencies: HashSet<&String> = vec.iter().filter(|(state, _)| *state==TextState::Variable).map(|(_, val)| val).collect();
                 if check_circular_depedencies(names, dependencies, incomplete_strings) {
                     return true;
                 }
@@ -569,7 +604,7 @@ fn disable_negative_sign(t: ForcedNumberCategory) -> ForcedNumberCategory {
     }
 }
 
-fn get_number_from_string(t: NumberType, value: String) -> Result<Element, Error> {
+fn get_number_from_string(t: NumberType, value: &str) -> Result<Element, ParseNumberError> {
     use NumberType::{Signed, Unsigned, Decimal};
     match t {
         Signed => match value.parse::<i128>() {
@@ -606,7 +641,7 @@ fn get_number_from_string(t: NumberType, value: String) -> Result<Element, Error
     }
 }
 
-fn get_number_from_forced(f: ForcedNumberCategory, value: String) -> Result<Element, Error> {
+fn get_number_from_forced(f: ForcedNumberCategory, value: &str) -> Result<Element, ParseNumberError> {
     use ForcedDecimal::{F32, F64};
     use ForcedSigned::{I8, I16, I32, I64, I128};
     use ForcedUnsigned::{U8, U16, U32, U64, U128};

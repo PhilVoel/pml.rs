@@ -26,8 +26,15 @@ mod elem {
 }
 use elem::Element;
 
+#[derive(Debug)]
 pub struct PmlStruct {
     elements: HashMap<String, Element>
+}
+
+#[derive(Debug)]
+pub enum ParseNumberError {
+    Int(ParseIntError),
+    Float(ParseFloatError)
 }
 
 #[derive(Debug)]
@@ -40,8 +47,11 @@ pub enum Error {
     CircularDependency(Vec<String>),
     FileAccess(IoError),
     Parse,
-    ParseIntError(ParseIntError),
-    ParseFloatError(ParseFloatError),
+    ParseNumberError{
+        line: u32,
+        value: String,
+        error: ParseNumberError
+    },
     IllegalCharacter{
         char: char,
         line: u32,
