@@ -4,10 +4,10 @@ mod impls;
 pub mod parse;
 
 mod elem {
-    use crate::parse::StringState;
+    use crate::parse::TextState;
     #[derive(Debug, Clone)]
     pub enum Element {
-        IncompleteString(Vec<(String, StringState)>),
+        IncompleteString(Vec<(String, TextState)>),
         PmlString(String),
         PmlBool(bool),
         PmlI128(i128),
@@ -35,18 +35,23 @@ pub enum Error {
     AlreadyExists {
         key: String,
         old_val: Element,
-        new_val: Element
+        line: u32
     },
     CircularDependency(Vec<String>),
     FileAccess(IoError),
+    Parse,
+    ParseIntError(ParseIntError),
+    ParseFloatError(ParseFloatError),
+    IllegalCharacter{
+        char: char,
+        line: u32,
+        col: u32
+    },
     UnfulfilledDependency{
         key: String,
         dependency: String
     },
-    Parse,
-    ParseIntError(ParseIntError),
-    ParseFloatError(ParseFloatError),
-    UnknownTypeForced{
+    UnknownForcedType{
         key: String,
         type_name: String
     }
@@ -62,12 +67,11 @@ impl<'a> PmlStruct {
 
     pub fn add<T>(&mut self, key: String, elem: T) -> Result<(), Error>
         where
-        T: Into<Element> + Clone
+        T: Into<Element>
         {
-            match self.elements.insert(key.clone(), elem.clone().into()) {
-            Some(old_val) => Err(Error::AlreadyExists{key, old_val, new_val:elem.into()}),
+            match self.elements.insert(key.clone(), elem.into()) {
+                Some(old_val) => Err(Error::AlreadyExists{key, old_val, line: 0}),
                 None => Ok(())
             }
         }
 }
-

@@ -2,51 +2,474 @@ use std::fs;
 use std::collections::HashMap;
 use crate::{Element, PmlStruct, Error};
 
-mod string_state {
-    #[derive(Clone, Copy, PartialEq, Debug)]
-    pub enum StringState {
-        Text,
-        Variable,
-        None
-    }
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub enum TextState {
+    Literal,
+    LiteralEscaped,
+    VariableStart,
+    Variable,
+    VariableDone,
+    Between
 }
-pub (crate) use string_state::StringState;
+
+#[derive(PartialEq, Debug)]
+enum ParseState {
+    KeyStart,
+    Key,
+    KeyDone,
+    ValueStart,
+    ValueForceStart,
+    ValueForce,
+    ValueForceDone,
+    ValueAllowSpace(ForcedNumberCategory),
+    Value(ValueType),
+    ValueDone
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+enum ValueType {
+    Text(TextState),
+    Bool,
+    Number(NumberType),
+    Forced(ForcedNumberCategory)
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+enum NumberType {
+    Signed,
+    Unsigned,
+    Decimal
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum ForcedNumberCategory {
+    Signed(ForcedSigned),
+    Unsigned(ForcedUnsigned),
+    Decimal(ForcedDecimal)
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum ForcedDecimal {
+    F32(bool, bool),
+    F64(bool, bool)
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum ForcedSigned {
+    I8(bool),
+    I16(bool),
+    I32(bool),
+    I64(bool),
+    I128(bool)
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum ForcedUnsigned {
+    U8,
+    U16,
+    U32,
+    U64,
+    U128
+}
 
 pub fn file(file: &str) -> Result<PmlStruct, Error> {
-    parse_lines(
-        get_lines(String::from(file))?
-    )
+    let file_content = fs::read_to_string(file)?;
+    parse_string(file_content)
 }
 
-fn get_lines(file: String) -> Result<Vec<String>, Error> {
-    let mut lines = Vec::new();
-    let contents = fs::read_to_string(file)?;
-    for line in contents.lines() {
-        lines.push(line.to_string());
-    }
-    Ok(lines)
-}
+fn parse_string(string: String) -> Result<PmlStruct, Error> {
+    use ParseState::{KeyStart, Key, KeyDone, ValueStart, ValueForceStart, ValueForce, ValueForceDone, ValueAllowSpace, Value, ValueDone};
+    use ValueType::{Text, Bool, Number, Forced};
+    use TextState::{Literal, LiteralEscaped, VariableStart, Variable, VariableDone, Between};
+    use NumberType::{Signed, Unsigned, Decimal};
+    use ForcedNumberCategory as FNC;
+    use ForcedDecimal::{F32, F64};
+    use ForcedSigned::{I8, I16, I32, I64, I128};
+    use ForcedUnsigned::{U8, U16, U32, U64, U128};
 
-fn parse_lines(lines: Vec<String>) -> Result<PmlStruct, Error> {
     let mut elements: HashMap<String, Element> = HashMap::new();
-    let mut incomplete_strings: HashMap<String, Vec<(String, StringState)>> = HashMap::new();
-    for line in lines {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {return Err(Error::Parse)};
-        let key = key.trim().to_string();
-        let elem = convert_to_pmlelem(value.trim(), key.clone())?;
-        match elem {
-            Element::IncompleteString(vec) => {incomplete_strings.insert(key.clone(), vec);},
-            elem => if let Some(old_val) = elements.insert(key.clone(), elem.clone()) {
-                return Err(Error::AlreadyExists{key, old_val, new_val:elem});
+    let mut string_elements: Vec<(TextState, String)> = Vec::new();
+    let mut incomplete_strings: HashMap<String, Vec<(TextState, String)>> = HashMap::new();
+    let mut state = KeyStart;
+    let mut key = String::new();
+    let mut value = String::new();
+    let mut force = String::new();
+    let mut line_counter: u32 = 1;
+    let mut column_counter: u32 = 0;
+
+    for current_char in string.chars() {
+        column_counter += 1;
+        match (&state, current_char) {
+            (KeyStart, c) if c.is_whitespace() => {
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+            },
+            (KeyStart, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (KeyStart, c) => {
+                state = Key;
+                key.push(c);
             }
+            (Key, '=') => match elements.get(&key) {
+                None => state = ValueStart,
+                Some(old_val) => return Err(Error::AlreadyExists{key, old_val: old_val.clone(), line: line_counter})
+            }
+            (Key, c) if c.is_whitespace() => match elements.get(&key) {
+                None => {
+                    state = KeyDone;
+                    if c == '\n' {
+                        line_counter += 1;
+                        column_counter = 0;
+                    }
+                }
+                Some(old_val) => return Err(Error::AlreadyExists{key, old_val: old_val.clone(), line: line_counter})
+            }
+            (Key, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (Key, c) => key.push(c),
+            (KeyDone, '=') => state = ValueStart,
+            (KeyDone, c) if c.is_whitespace() => {
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+            },
+            (KeyDone, c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (ValueStart, c) if c.is_whitespace() => {
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+            }
+            (ValueStart, '(') => state = ValueForceStart,
+            (ValueStart, '{') => state = Value(Text(Variable)),
+            (ValueStart, '"') => state = Value(Text(Literal)),
+            (ValueStart, '-') => {
+                value.push('-');
+                state = Value(Number(Signed))
+            }
+            (ValueStart, '.') => {
+                value.push('.');
+                state = Value(Number(Decimal))
+            }
+            (ValueStart, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (ValueStart, c) if c.is_ascii_digit() => {
+                state = Value(Number(Unsigned));
+                value.push(c);
+            }
+            (ValueStart, c @ ('b'|'f')) => {
+                state = Value(Bool);
+                value.push(c);
+            }
+            (ValueStart, c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (ValueForceStart, c) if c.is_whitespace() => {
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+            }
+            (ValueForceStart, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (ValueForceStart, c) => {
+                state = ValueForce;
+                force.push(c);
+            }
+            (ValueForce, ')') => {
+                let force_type = match force.as_str() {
+                    "u8" => FNC::Unsigned(U8),
+                    "u16" => FNC::Unsigned(U16),
+                    "u32" => FNC::Unsigned(U32),
+                    "u64" => FNC::Unsigned(U64),
+                    "u128" => FNC::Unsigned(U128),
+                    "i8" => FNC::Signed(I8(false)),
+                    "i16" => FNC::Signed(I16(false)),
+                    "i32" => FNC::Signed(I32(false)),
+                    "i64" => FNC::Signed(I64(false)),
+                    "i128" => FNC::Signed(I128(false)),
+                    "f32" => FNC::Decimal(F32(false, false)),
+                    "f64" => FNC::Decimal(F64(false, false)),
+                    t => return Err(Error::UnknownForcedType {
+                        key,
+                        type_name: t.to_string()
+                    })
+                };
+                state = ValueAllowSpace(force_type);
+            }
+            (ValueForce, c) if c.is_whitespace() => {
+                state= ValueForceDone;
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+            }
+            (ValueForce, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (ValueForce, c) => force.push(c),
+            (ValueForceDone, ')') => {
+                let force_type = match force.as_str() {
+                    "u8" => FNC::Unsigned(U8),
+                    "u16" => FNC::Unsigned(U16),
+                    "u32" => FNC::Unsigned(U32),
+                    "u64" => FNC::Unsigned(U64),
+                    "u128" => FNC::Unsigned(U128),
+                    "i8" => FNC::Signed(I8(false)),
+                    "i16" => FNC::Signed(I16(false)),
+                    "i32" => FNC::Signed(I32(false)),
+                    "i64" => FNC::Signed(I64(false)),
+                    "i128" => FNC::Signed(I128(false)),
+                    "f32" => FNC::Decimal(F32(false, false)),
+                    "f64" => FNC::Decimal(F64(false, false)),
+                    t => return Err(Error::UnknownForcedType {
+                        key,
+                        type_name: t.to_string()
+                    })
+                };
+                state = ValueAllowSpace(force_type);
+                force = String::new()
+            }
+            (ValueForceDone, c) if c.is_whitespace() => {
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+            }
+            (ValueForceDone, c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (ValueAllowSpace(_), c) if c.is_whitespace() => {
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+            }
+            (ValueAllowSpace(f), '.') => {
+                value.push('.');
+                state = match f {
+                    FNC::Decimal(_) => Value(Forced(disable_decimal_point(*f))),
+                    _ => return Err(Error::IllegalCharacter {
+                        char: '.',
+                        line: line_counter,
+                        col: column_counter
+                    })
+                }
+            }
+            (ValueAllowSpace(f), '-') => {
+                value.push('-');
+                state = match f {
+                    FNC::Signed(_)|FNC::Decimal(_) => Value(Forced(disable_negative_sign(*f))),
+                    _ => return Err(Error::IllegalCharacter {
+                        char: '-',
+                        line: line_counter,
+                        col: column_counter
+                    })
+                }
+            }
+            (ValueAllowSpace(f), c) if c.is_ascii_digit() => {
+                value.push(c);
+                state = Value(Forced(disable_negative_sign(*f)));
+            }
+            (ValueAllowSpace(_), c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (Value(Bool), c) => match (value.as_str(), c) {
+                ("t", 'r')|
+                ("tr", 'u')|
+                ("tru", 'e')|
+                ("f", 'a')|
+                ("fa", 'l')|
+                ("fal", 's')|
+                ("fals", 'e') => {
+                    value.push(c);
+                    if c == 'e' {
+                        let elem = (value.as_str() == "true").into();
+                        elements.insert(key, elem);
+                        state = ValueDone;
+                        key = String::new();
+                        value = String::new();
+                    }
+                }
+                _ => return Err(Error::IllegalCharacter {
+                    char: c,
+                    line: line_counter,
+                    col: column_counter
+                })
+            }
+            (Value(Number(_)), c) if c.is_ascii_digit() => value.push(c),
+            (Value(Number(Unsigned|Signed)), '.') => {
+                value.push('.');
+                state = Value(Number(Decimal));
+            }
+            (Value(Number(_)), '_') => (),
+            (Value(Number(t)), ',') => {
+                elements.insert(key, get_number_from_string(*t, value)?);
+                key = String::new();
+                value = String::new();
+            }
+            (Value(Number(_)), c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (Value(Text(Literal)), '\\') => state = Value(Text(Literal)),
+            (Value(Text(Literal)), '"') => {
+                state = Value(Text(Between));
+                string_elements.push((Literal, value));
+                value = String::new();
+            }
+            (Value(Text(Literal)), c) => value.push(c),
+            (Value(Text(LiteralEscaped)), c) => {
+                state = Value(Text(Literal));
+                value.push(match c {
+                    'r' => continue,
+                    't' => '\t',
+                    'n' => '\n',
+                    c => c
+                })
+            }
+            (Value(Text(VariableStart)), c) if c.is_whitespace() => {
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+            }
+            (Value(Text(VariableStart)), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (Value(Text(VariableStart)), c) => {
+                value.push(c);
+                state = Value(Text(Variable));
+            }
+            (Value(Text(Variable)), '}') => {
+                string_elements.push((Variable, value));
+                value = String::new();
+                state = Value(Text(Between));
+            }
+            (Value(Text(Variable)), c) if c.is_whitespace() => {
+                state = Value(Text(VariableDone));
+                string_elements.push((Variable, value));
+                value = String::new();
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+            }
+            (Value(Text(Variable)), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (Value(Text(Variable)), c) => value.push(c),
+            (Value(Text(VariableDone)), c) if c.is_whitespace() => {
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+            }
+            (Value(Text(VariableDone)), '}') => state = Value(Text(Between)),
+            (Value(Text(VariableDone)), c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (Value(Text(Between)), '"') => state = Value(Text(Literal)),
+            (Value(Text(Between)), '{') => state = Value(Text(VariableStart)),
+            (Value(Text(Between)), c) if c.is_whitespace() => {
+                if c == '\n' {
+                    line_counter +=1;
+                    column_counter = 0;
+                }
+            }
+            (Value(Text(Between)), ',') => {
+                state = KeyStart;
+                incomplete_strings.insert(key, string_elements);
+                string_elements = Vec::new();
+                key = String::new();
+            }
+            (Value(Text(Between)), c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (Value(Forced(t@FNC::Decimal(F32(_, false)|F64(_, false)))), '.') => {
+                state = Value(Forced(disable_decimal_point(*t)));
+                value.push('.');
+            }
+            (Value(Forced(_)), '.') => return Err(Error::IllegalCharacter {
+                char: '.',
+                line: line_counter,
+                col: column_counter
+            }),
+            (Value(Forced(t@(FNC::Signed(I8(false)|I16(false)|I32(false)|I64(false)|I128(false))|FNC::Decimal(F32(false, false)|F64(false, false))))), '-') => {
+                value.push('-');
+                state = Value(Forced(disable_negative_sign(*t)));
+            }
+            (Value(Forced(_)), '-') => return Err(Error::IllegalCharacter {
+                char: '-',
+                line: line_counter,
+                col: column_counter
+            }),
+            (Value(Forced(_)), c) if c.is_ascii_digit() => value.push(c),
+            (Value(Forced(f)), c) if c.is_whitespace() => {
+                elements.insert(key, get_number_from_forced(*f, value)?);
+                key = String::new();
+                value = String::new();
+                state = ValueDone;
+            }
+            (Value(Forced(_)), c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (ValueDone, c) if c.is_whitespace() => {
+                if c == '\n' {
+                    line_counter += 1;
+                    column_counter = 0;
+                }
+            }
+            (ValueDone, ',') => state = KeyStart,
+            (ValueDone, c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            })
         }
     }
+
     for (name, inc_str) in &incomplete_strings {
         let mut names = vec![name];
-        let dependencies: Vec<&String> = inc_str.iter().filter(|(_,state)| *state==StringState::Variable).map(|(val,_)| val).collect();
+        let dependencies: Vec<&String> = inc_str.iter().filter(|(state, _)| *state==TextState::Variable).map(|(_, val)| val).collect();
         for dependency in &dependencies {
             match elements.get(*dependency) {
                 Some(_) => (),
@@ -61,30 +484,30 @@ fn parse_lines(lines: Vec<String>) -> Result<PmlStruct, Error> {
         }
     }
     while !incomplete_strings.is_empty() {
-        let mut incomplete_strings_2: HashMap<String, Vec<(String, StringState)>> = HashMap::new();
+        let mut incomplete_strings_2: HashMap<String, Vec<(TextState, String)>> = HashMap::new();
         for (key, inc_str) in incomplete_strings {
             let mut accum_str = String::new();
-            let mut split: Vec<(String, StringState)> = Vec::new();
-            for (value, state) in inc_str {
+            let mut split: Vec<(TextState, String)> = Vec::new();
+            for (state, value) in inc_str {
                 match state {
-                    StringState::Text => accum_str.push_str(&value),
-                    StringState::Variable => {
+                    TextState::Literal => accum_str.push_str(&value),
+                    TextState::Variable => {
                         if let Some(val) = elements.get(&value) {
                             accum_str.push_str(&val.to_string());
                         } else {
-                            split.push((accum_str, StringState::Text));
+                            split.push((TextState::Literal, accum_str));
                             accum_str = String::new();
-                            split.push((value, StringState::Variable));
+                            split.push((TextState::Variable, value));
                         }
                     },
-                    StringState::None => ()
+                    _ => ()
                 }
             }
             if split.is_empty() {
                 elements.insert(key, accum_str.into());
             }
             else {
-                split.push((accum_str, StringState::Text));
+                split.push((TextState::Literal, accum_str));
                 incomplete_strings_2.insert(key, split);
             }
         }
@@ -93,7 +516,7 @@ fn parse_lines(lines: Vec<String>) -> Result<PmlStruct, Error> {
     Ok(PmlStruct {elements})
 }
 
-fn check_circular_depedencies<'a>(names: &mut Vec<&'a String>, dependencies: Vec<&'a String>, incomplete_strings: &'a HashMap<String, Vec<(String, StringState)>>) -> bool {
+fn check_circular_depedencies<'a>(names: &mut Vec<&'a String>, dependencies: Vec<&'a String>, incomplete_strings: &'a HashMap<String, Vec<(TextState, String)>>) -> bool {
     for dependency in dependencies {
         if names.contains(&dependency) {
             return true;
@@ -102,7 +525,7 @@ fn check_circular_depedencies<'a>(names: &mut Vec<&'a String>, dependencies: Vec
             None => (),
             Some(vec) => {
                 names.push(dependency);
-                let dependencies: Vec<&String> = vec.iter().filter(|(_,state)| *state==StringState::Variable).map(|(val,_)| val).collect();
+                let dependencies: Vec<&String> = vec.iter().filter(|(state, _)| *state==TextState::Variable).map(|(_, val)| val).collect();
                 if check_circular_depedencies(names, dependencies, incomplete_strings) {
                     return true;
                 }
@@ -112,98 +535,100 @@ fn check_circular_depedencies<'a>(names: &mut Vec<&'a String>, dependencies: Vec
     false
 }
 
-fn convert_to_pmlelem(value: &str, key: String) -> Result<Element, Error> {
-    //String
-    if value.starts_with('"') || value.starts_with('{') && value.ends_with('"') || value.ends_with('}') {
-        use StringState::*;
-        let value = value.replace("\\\"", "\"").replace("\\n", "\n");
-        let mut to_insert = String::new();
-        let mut state = None;
-        let mut split: Vec<(String, StringState)> = Vec::new();
-        for c in value.chars() {
-            match (state, c) {
-                (None, '"') => state = Text,
-                (None, '{') => state = Variable,
-                (None, ' ') => (),
-                (None, _) => return Err(Error::Parse),
-                (Text, '"') if !to_insert.ends_with('\\') => {
-                    state = None;
-                    if !to_insert.is_empty() {
-                        split.push((to_insert.clone(), Text));
-                        to_insert.clear();
-                    }
-                },
-                (Variable, '}') => {
-                    state = None;
-                    if !to_insert.is_empty() {
-                        split.push((to_insert.clone(), Variable));
-                        to_insert.clear();
-                    }
-                },
-                (Variable, ' ') => return Err(Error::Parse),
-                (Text|Variable, _) => to_insert.push(c),
-            }
+fn is_char_reserved(c: char) -> bool {
+    ['=', ',', '{', '}', '(', ')', '"', '\n', '[', ']', ':', '|'].into_iter().any(|r| r == c)
+}
+
+fn disable_decimal_point(t: ForcedNumberCategory) -> ForcedNumberCategory {
+    use ForcedDecimal::{F32, F64};
+    use ForcedNumberCategory::Decimal;
+    match t {
+        Decimal(F32(_, _)) => Decimal(F32(true, true)),
+        Decimal(F64(_, _)) => Decimal(F64(true, true)),
+        t => t
+    }
+}
+
+fn disable_negative_sign(t: ForcedNumberCategory) -> ForcedNumberCategory {
+    use ForcedDecimal::{F32, F64};
+    use ForcedSigned::{I8, I16, I32, I64, I128};
+    use ForcedNumberCategory::{Decimal, Signed, Unsigned};
+    match t {
+        Decimal(d) => match d {
+            F32(_, _) => Decimal(F32(true, false)),
+            F64(_, _) => Decimal(F64(true, false))
         }
-        if state != None {
-            return Err(Error::Parse);
+        Signed(s) => match s {
+            I8(_) => Signed(I8(true)),
+            I16(_) => Signed(I16(true)),
+            I32(_) => Signed(I32(true)),
+            I64(_) => Signed(I64(true)),
+            I128(_) => Signed(I128(true)),
         }
-        Ok(split.into())
-    //Bool
-    } else if value == "true" {
-        Ok(true.into())
-    } else if value == "false" {
-        Ok(false.into())
-    //Number
-    } else if let Some(stripped) = value.strip_prefix('(') {
-        let (force_type, val) = stripped.split_once(')').ok_or(Error::Parse)?;
-        match force_type.trim() {
-            "s8" => Ok(val.trim().parse::<i8>()?.into()),
-            "s16" => Ok(val.trim().parse::<i16>()?.into()),
-            "s32" => Ok(val.trim().parse::<i32>()?.into()),
-            "s64" => Ok(val.trim().parse::<i64>()?.into()),
-            "s128" => Ok(val.trim().parse::<i128>()?.into()),
-            "u8" => Ok(val.trim().parse::<u8>()?.into()),
-            "u16" => Ok(val.trim().parse::<u16>()?.into()),
-            "u32" => Ok(val.trim().parse::<u32>()?.into()),
-            "u64" => Ok(val.trim().parse::<u64>()?.into()),
-            "u128" => Ok(val.trim().parse::<u128>()?.into()),
-            "f32" => Ok(val.trim().parse::<f32>()?.into()),
-            "f64" => Ok(val.trim().parse::<f64>()?.into()),
-            type_name => Err(Error::UnknownTypeForced{key, type_name:type_name.to_string()})
-        }
-    } else {
-        match value.parse::<i128>() {
+        Unsigned(u) => Unsigned(u)
+    }
+}
+
+fn get_number_from_string(t: NumberType, value: String) -> Result<Element, Error> {
+    use NumberType::{Signed, Unsigned, Decimal};
+    match t {
+        Signed => match value.parse::<i128>() {
             Ok(num) => {
-                if num < 0 {
-                    #[allow(clippy::cast_possible_truncation)]
-                    match num {
-                        -128..=-1 => Ok((num as i8).into()),
-                        -32_768..=-129 => Ok((num as i16).into()),
-                        -2_147_483_648..=-32_769 => Ok((num as i32).into()),
-                        -9_223_372_036_854_775_808..=-2_147_483_649 => Ok((num as i64).into()),
-                        _ => Ok(num.into())
-                    }
-                }
-                else {
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    match num {
-                        0..=255 => Ok((num as u8).into()),
-                        256..=65_535 => Ok((num as u16).into()),
-                        65_536..=4_294_967_295 => Ok((num as u32).into()),
-                        _ => Ok((num as u64).into()),
-                    }
-                }
-            },
-            Err(_) => match value.parse::<u128>() {
-                Ok(num) => Ok((num).into()),
-                Err(_) => match value.parse::<f64>() {
-                    Ok(num64) => match value.parse::<f32>() {
-                        Ok(num32) => Ok(num32.into()),
-                        Err(_) => Ok(num64.into())
-                    }
-                    Err(_) => Err(Error::Parse)
+                match num {
+                    -128..=-1 => Ok((num as i8).into()),
+                    -32_768..=-129 => Ok((num as i16).into()),
+                    -2_147_483_648..=-32_769 => Ok((num as i32).into()),
+                    -9_223_372_036_854_775_808..=-2_147_483_649 => Ok((num as i64).into()),
+                    _ => Ok(num.into())
                 }
             }
+            Err(e) => Err(e.into())
+        }
+        Unsigned => match value.parse::<u128>() {
+            Ok(num) => {
+                match num {
+                    0..=255 => Ok((num as u8).into()),
+                    256..=65_535 => Ok((num as u16).into()),
+                    65_536..=4_294_967_295 => Ok((num as u32).into()),
+                    4_294_967_296..=18_446_744_073_709_551_615 => Ok((num as u64).into()),
+                    _ => Ok(num.into()),
+                }
+            }
+            Err(e) => Err(e.into())
+        }
+        Decimal => match value.parse::<f64>() {
+            Ok(num64) => match value.parse::<f32>() {
+                Ok(num32) => Ok(num32.into()),
+                Err(_) => Ok(num64.into())
+            }
+            Err(e) => Err(e.into())
         }
     }
+}
+
+fn get_number_from_forced(f: ForcedNumberCategory, value: String) -> Result<Element, Error> {
+    use ForcedDecimal::{F32, F64};
+    use ForcedSigned::{I8, I16, I32, I64, I128};
+    use ForcedUnsigned::{U8, U16, U32, U64, U128};
+    use ForcedNumberCategory::{Decimal, Signed, Unsigned};
+    Ok(match f {
+        Decimal(d) => match d {
+            F32(_, _) => value.parse::<f32>()?.into(),
+            F64(_, _) => value.parse::<f64>()?.into(),
+        }
+        Signed(s) => match s {
+            I8(_) => value.parse::<i8>()?.into(),
+            I16(_) => value.parse::<i16>()?.into(),
+            I32(_) => value.parse::<i32>()?.into(),
+            I64(_) => value.parse::<i64>()?.into(),
+            I128(_) => value.parse::<i128>()?.into(),
+        }
+        Unsigned(u) => match u {
+            U8 => value.parse::<u8>()?.into(),
+            U16 => value.parse::<u16>()?.into(),
+            U32 => value.parse::<u32>()?.into(),
+            U64 => value.parse::<u64>()?.into(),
+            U128 => value.parse::<u128>()?.into(),
+        }
+    })
 }
