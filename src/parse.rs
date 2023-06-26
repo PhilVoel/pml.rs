@@ -270,17 +270,15 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     column_counter = 0;
                 }
             }
-            (ValueAllowSpace(f), '.') => {
+            (ValueAllowSpace(f @ FNC::Decimal(_)), '.') => {
                 value.push('.');
-                state = match f {
-                    FNC::Decimal(_) => Value(Forced(disable_decimal_point(*f))),
-                    _ => return Err(Error::IllegalCharacter {
-                        char: '.',
-                        line: line_counter,
-                        col: column_counter
-                    })
-                }
+                state = Value(Forced(disable_decimal_point(*f)));
             }
+            (ValueAllowSpace(_), '.') => return Err(Error::IllegalCharacter {
+                char: '.',
+                line: line_counter,
+                col: column_counter
+            }),
             (ValueAllowSpace(f), '-') => {
                 value.push('-');
                 state = match f {
