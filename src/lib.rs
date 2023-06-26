@@ -46,7 +46,6 @@ pub enum Error {
     },
     CircularDependency(Vec<String>),
     FileAccess(IoError),
-    Parse,
     ParseNumberError{
         line: u32,
         value: String,
