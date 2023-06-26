@@ -331,7 +331,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 state = Value(Number(Decimal));
             }
             (Value(Number(_)), '_') => (),
-            (Value(Number(t)), ',') => {
+            (Value(Number(t)), ';') => {
                 let num = match get_number_from_string(*t, &value){
                     Ok(n) => n,
                     Err(e) => return Err(Error::ParseNumberError {
@@ -439,7 +439,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     column_counter = 0;
                 }
             }
-            (Value(Text(Between)), ',') => {
+            (Value(Text(Between)), ';') => {
                 state = KeyStart;
                 incomplete_strings.insert(key, string_elements);
                 string_elements = Vec::new();
@@ -494,7 +494,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     column_counter = 0;
                 }
             }
-            (ValueDone, ',') => state = KeyStart,
+            (ValueDone, ';') => state = KeyStart,
             (ValueDone, c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
@@ -575,7 +575,7 @@ fn check_circular_depedencies<'a>(names: &mut HashSet<&'a String>, dependencies:
 }
 
 fn is_char_reserved(c: char) -> bool {
-    ['=', ',', '{', '}', '(', ')', '"', '\n', '[', ']', ':', '|', '.'].into_iter().any(|r| r == c)
+    ['=', ';', ',', '{', '}', '(', ')', '"', '\n', '[', ']', ':', '|', '.'].into_iter().any(|r| r == c)
 }
 
 fn disable_decimal_point(t: ForcedNumberCategory) -> ForcedNumberCategory {
