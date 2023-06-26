@@ -74,10 +74,10 @@ enum ForcedUnsigned {
 
 pub fn file(file: &str) -> Result<PmlStruct, Error> {
     let file_content = fs::read_to_string(file)?;
-    parse_string(file_content)
+    parse_string(&file_content)
 }
 
-fn parse_string(string: String) -> Result<PmlStruct, Error> {
+fn parse_string(string: &str) -> Result<PmlStruct, Error> {
     use ParseState::{KeyStart, Key, KeyDone, ValueStart, ValueForceStart, ValueForce, ValueForceDone, ValueAllowSpace, Value, ValueDone};
     use ValueType::{Text, Bool, Number, Forced};
     use TextState::{Literal, LiteralEscaped, VariableStart, Variable, VariableDone, Between};
@@ -158,11 +158,11 @@ fn parse_string(string: String) -> Result<PmlStruct, Error> {
             (ValueStart, '"') => state = Value(Text(Literal)),
             (ValueStart, '-') => {
                 value.push('-');
-                state = Value(Number(Signed))
+                state = Value(Number(Signed));
             }
             (ValueStart, '.') => {
                 value.push('.');
-                state = Value(Number(Decimal))
+                state = Value(Number(Decimal));
             }
             (ValueStart, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
                 char: c,
@@ -251,7 +251,7 @@ fn parse_string(string: String) -> Result<PmlStruct, Error> {
                     })
                 };
                 state = ValueAllowSpace(force_type);
-                force = String::new()
+                force = String::new();
             }
             (ValueForceDone, c) if c.is_whitespace() => {
                 if c == '\n' {
@@ -285,7 +285,7 @@ fn parse_string(string: String) -> Result<PmlStruct, Error> {
                 value.push('-');
                 state = match f {
                     FNC::Signed(_)|FNC::Decimal(_) => Value(Forced(disable_negative_sign(*f))),
-                    _ => return Err(Error::IllegalCharacter {
+                    FNC::Unsigned(_) => return Err(Error::IllegalCharacter {
                         char: '-',
                         line: line_counter,
                         col: column_counter
@@ -302,6 +302,7 @@ fn parse_string(string: String) -> Result<PmlStruct, Error> {
                 col: column_counter
             }),
             (Value(Bool), c) => match (value.as_str(), c) {
+                #[allow(clippy::unnested_or_patterns)]
                 ("t", 'r')|
                 ("tr", 'u')|
                 ("tru", 'e')|
@@ -381,7 +382,7 @@ fn parse_string(string: String) -> Result<PmlStruct, Error> {
                     't' => '\t',
                     'n' => '\n',
                     c => c
-                })
+                });
             }
             (Value(Text(VariableStart)), c) if c.is_whitespace() => {
                 if c == '\n' {
@@ -611,25 +612,37 @@ fn get_number_from_string(t: NumberType, value: &str) -> Result<Element, ParseNu
     use NumberType::{Signed, Unsigned, Decimal};
     match t {
         Signed => match value.parse::<i128>() {
-            Ok(num) => {
-                match num {
-                    -128..=-1 => Ok((num as i8).into()),
-                    -32_768..=-129 => Ok((num as i16).into()),
-                    -2_147_483_648..=-32_769 => Ok((num as i32).into()),
-                    -9_223_372_036_854_775_808..=-2_147_483_649 => Ok((num as i64).into()),
-                    _ => Ok(num.into())
+            Ok(num128) => {
+                match i8::try_from(num128) {
+                    Ok(num8) => Ok(num8.into()),
+                    Err(_) => match i16::try_from(num128) {
+                        Ok(num16) => Ok(num16.into()),
+                        Err(_) => match i32::try_from(num128) {
+                            Ok(num32) => Ok(num32.into()),
+                            Err(_) => match i64::try_from(num128) {
+                                Ok(num64) => Ok(num64.into()),
+                                Err(_) => Ok(num128.into())
+                            }
+                        }
+                    }
                 }
             }
             Err(e) => Err(e.into())
         }
         Unsigned => match value.parse::<u128>() {
-            Ok(num) => {
-                match num {
-                    0..=255 => Ok((num as u8).into()),
-                    256..=65_535 => Ok((num as u16).into()),
-                    65_536..=4_294_967_295 => Ok((num as u32).into()),
-                    4_294_967_296..=18_446_744_073_709_551_615 => Ok((num as u64).into()),
-                    _ => Ok(num.into()),
+            Ok(num128) => {
+                match u8::try_from(num128) {
+                    Ok(num8) => Ok(num8.into()),
+                    Err(_) => match u16::try_from(num128) {
+                        Ok(num16) => Ok(num16.into()),
+                        Err(_) => match u32::try_from(num128) {
+                            Ok(num32) => Ok(num32.into()),
+                            Err(_) => match u64::try_from(num128) {
+                                Ok(num64) => Ok(num64.into()),
+                                Err(_) => Ok(num128.into())
+                            }
+                        }
+                    }
                 }
             }
             Err(e) => Err(e.into())
