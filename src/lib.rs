@@ -56,6 +56,7 @@ pub enum Error {
         line: u32,
         col: u32
     },
+    UnexpectedEOF,
     UnfulfilledDependency{
         key: String,
         dependency: String

@@ -501,6 +501,9 @@ fn parse_string(string: String) -> Result<PmlStruct, Error> {
             })
         }
     }
+    if state != KeyStart {
+        return Err(Error::UnexpectedEOF);
+    }
     for (name, inc_str) in &incomplete_strings {
         let mut names = HashSet::new();
         names.insert(name);
