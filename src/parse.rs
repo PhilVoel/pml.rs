@@ -21,7 +21,7 @@ enum ParseState {
     ValueForceStart,
     ValueForce,
     ValueForceDone,
-    ValueAllowSpace(ForcedNumberCategory),
+    ValueAfterForce(ForcedNumberCategory),
     Value(ValueType),
     ValueDone
 }
@@ -78,7 +78,7 @@ pub fn file(file: &str) -> Result<PmlStruct, Error> {
 }
 
 fn parse_string(string: &str) -> Result<PmlStruct, Error> {
-    use ParseState::{KeyStart, Key, KeyDone, ValueStart, ValueForceStart, ValueForce, ValueForceDone, ValueAllowSpace, Value, ValueDone};
+    use ParseState::{KeyStart, Key, KeyDone, ValueStart, ValueForceStart, ValueForce, ValueForceDone, ValueAfterForce, Value, ValueDone};
     use ValueType::{Text, Bool, Number, Forced};
     use TextState::{Literal, LiteralEscaped, VariableStart, Variable, VariableDone, Between};
     use NumberType::{Signed, Unsigned, Decimal};
@@ -216,7 +216,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                         type_name: t.to_string()
                     })
                 };
-                state = ValueAllowSpace(force_type);
+                state = ValueAfterForce(force_type);
             }
             (ValueForce, c) if c.is_whitespace() => {
                 state= ValueForceDone;
@@ -250,7 +250,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                         type_name: t.to_string()
                     })
                 };
-                state = ValueAllowSpace(force_type);
+                state = ValueAfterForce(force_type);
                 force = String::new();
             }
             (ValueForceDone, c) if c.is_whitespace() => {
@@ -264,22 +264,22 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 line: line_counter,
                 col: column_counter
             }),
-            (ValueAllowSpace(_), c) if c.is_whitespace() => {
+            (ValueAfterForce(_), c) if c.is_whitespace() => {
                 if c == '\n' {
                     line_counter += 1;
                     column_counter = 0;
                 }
             }
-            (ValueAllowSpace(f @ FNC::Decimal(_)), '.') => {
+            (ValueAfterForce(f @ FNC::Decimal(_)), '.') => {
                 value.push('.');
                 state = Value(Forced(disable_decimal_point(*f)));
             }
-            (ValueAllowSpace(_), '.') => return Err(Error::IllegalCharacter {
+            (ValueAfterForce(_), '.') => return Err(Error::IllegalCharacter {
                 char: '.',
                 line: line_counter,
                 col: column_counter
             }),
-            (ValueAllowSpace(f), '-') => {
+            (ValueAfterForce(f), '-') => {
                 value.push('-');
                 state = match f {
                     FNC::Signed(_)|FNC::Decimal(_) => Value(Forced(disable_negative_sign(*f))),
@@ -290,11 +290,11 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     })
                 }
             }
-            (ValueAllowSpace(f), c) if c.is_ascii_digit() => {
+            (ValueAfterForce(f), c) if c.is_ascii_digit() => {
                 value.push(c);
                 state = Value(Forced(disable_negative_sign(*f)));
             }
-            (ValueAllowSpace(_), c) => return Err(Error::IllegalCharacter {
+            (ValueAfterForce(_), c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
                 col: column_counter
