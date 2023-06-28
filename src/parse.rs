@@ -154,7 +154,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 }
             }
             (ValueStart, '(') => state = ValueForceStart,
-            (ValueStart, '{') => state = Value(Text(Variable)),
+            (ValueStart, '{') => state = Value(Text(VariableStart)),
             (ValueStart, '"') => state = Value(Text(Literal)),
             (ValueStart, '-') => {
                 value.push('-');
