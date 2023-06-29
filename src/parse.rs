@@ -153,8 +153,8 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     column_counter = 0;
                 }
             }
-            (ValueStart, '(') => state = ValueForceStart,
-            (ValueStart, '{') => state = Value(Text(VariableStart)),
+            (ValueStart, '<') => state = ValueForceStart,
+            (ValueStart, '|') => state = Value(Text(VariableStart)),
             (ValueStart, '"') => state = Value(Text(Literal)),
             (ValueStart, '-') => {
                 value.push('-');
@@ -197,7 +197,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 state = ValueForce;
                 force.push(c);
             }
-            (ValueForce, ')') => {
+            (ValueForce, '>') => {
                 let force_type = match force.as_str() {
                     "u8" => FNC::Unsigned(U8),
                     "u16" => FNC::Unsigned(U16),
@@ -231,7 +231,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 col: column_counter
             }),
             (ValueForce, c) => force.push(c),
-            (ValueForceDone, ')') => {
+            (ValueForceDone, '>') => {
                 let force_type = match force.as_str() {
                     "u8" => FNC::Unsigned(U8),
                     "u16" => FNC::Unsigned(U16),
@@ -397,7 +397,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 value.push(c);
                 state = Value(Text(Variable));
             }
-            (Value(Text(Variable)), '}') => {
+            (Value(Text(Variable)), '|') => {
                 string_elements.push((Variable, value));
                 value = String::new();
                 state = Value(Text(Between));
@@ -423,14 +423,14 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     column_counter = 0;
                 }
             }
-            (Value(Text(VariableDone)), '}') => state = Value(Text(Between)),
+            (Value(Text(VariableDone)), '|') => state = Value(Text(Between)),
             (Value(Text(VariableDone)), c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
                 col: column_counter
             }),
             (Value(Text(Between)), '"') => state = Value(Text(Literal)),
-            (Value(Text(Between)), '{') => state = Value(Text(VariableStart)),
+            (Value(Text(Between)), '|') => state = Value(Text(VariableStart)),
             (Value(Text(Between)), c) if c.is_whitespace() => {
                 if c == '\n' {
                     line_counter +=1;
@@ -573,7 +573,7 @@ fn check_circular_depedencies<'a>(names: &mut HashSet<&'a String>, dependencies:
 }
 
 fn is_char_reserved(c: char) -> bool {
-    ['=', ';', ',', '{', '}', '(', ')', '"', '\n', '[', ']', ':', '|', '.'].into_iter().any(|r| r == c)
+    ['=', ';', ',', '<', '>', '{', '}', '(', ')', '"', '\n', '[', ']', ':', '|', '.'].into_iter().any(|r| r == c)
 }
 
 fn disable_decimal_point(t: ForcedNumberCategory) -> ForcedNumberCategory {
