@@ -20,6 +20,7 @@ impl Display for Element {
             PmlF64(n) => write!(f, "{n}"),
             PmlF32(n) => write!(f, "{n}"),
             IncompleteString(_) => Err(Error),
+            Element::PmlStruct(_) => todo!(),
         }
     }
 }

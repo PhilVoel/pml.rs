@@ -87,7 +87,8 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
     use ForcedSigned::{I8, I16, I32, I64, I128};
     use ForcedUnsigned::{U8, U16, U32, U64, U128};
 
-    let mut elements: HashMap<String, Element> = HashMap::new();
+    let mut structs: Vec<(HashMap<String, Element>, String, Option<Element>)> = Vec::new();
+    let mut current_struct= HashMap::new();
     let mut string_elements: Vec<(TextState, String)> = Vec::new();
     let mut incomplete_strings: HashMap<String, Vec<(TextState, String)>> = HashMap::new();
     let mut state = KeyStart;
@@ -106,6 +107,18 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     column_counter = 0;
                 }
             },
+            (KeyStart, '}') if !structs.is_empty() => {
+                let (mut parent, key, own_val) = structs.pop().unwrap();
+                if current_struct.is_empty() {
+                    return Err(Error::EmptyStruct {
+                        key,
+                        closing_line: line_counter,
+                        closing_col: column_counter
+                    })
+                }
+                parent.insert(key, (current_struct, own_val).into());
+                current_struct = parent;
+            }
             (KeyStart, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
@@ -115,11 +128,11 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 state = Key;
                 key.push(c);
             }
-            (Key, '=') => match elements.get(&key) {
+            (Key, '=') => match current_struct.get(&key) {
                 None => state = ValueStart,
                 Some(old_val) => return Err(Error::AlreadyExists{key, old_val: old_val.clone(), line: line_counter})
             }
-            (Key, c) if c.is_whitespace() => match elements.get(&key) {
+            (Key, c) if c.is_whitespace() => match current_struct.get(&key) {
                 None => {
                     state = KeyDone;
                     if c == '\n' {
@@ -156,6 +169,12 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
             (ValueStart, '<') => state = ValueForceStart,
             (ValueStart, '|') => state = Value(Text(VariableStart)),
             (ValueStart, '"') => state = Value(Text(Literal)),
+            (ValueStart, '{') => {
+                state = KeyStart;
+                structs.push((current_struct, key, None));
+                key = String::new();
+                current_struct = HashMap::new();
+            }
             (ValueStart, '-') => {
                 value.push('-');
                 state = Value(Number(Signed));
@@ -251,7 +270,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     })
                 };
                 state = ValueAfterForce(force_type);
-                force = String::new();
+                force.clear();
             }
             (ValueForceDone, c) if c.is_whitespace() => {
                 if c == '\n' {
@@ -311,7 +330,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     value.push(c);
                     if c == 'e' {
                         let elem = (value.as_str() == "true").into();
-                        elements.insert(key, elem);
+                        current_struct.insert(key, elem);
                         state = ValueDone;
                         key = String::new();
                         value = String::new();
@@ -338,7 +357,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                         error: e
                     })
                 };
-                elements.insert(key, num);
+                current_struct.insert(key, num);
                 key = String::new();
                 value = String::new();
                 state = KeyStart;
@@ -352,7 +371,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                         error: e
                     })
                 };
-                elements.insert(key, num);
+                current_struct.insert(key, num);
                 key = String::new();
                 value = String::new();
                 if c == '\n' {
@@ -411,6 +430,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     column_counter = 0;
                 }
             }
+            (Value(Text(Variable)), '.') => value.push('.'),
             (Value(Text(Variable)), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
@@ -424,11 +444,15 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 }
             }
             (Value(Text(VariableDone)), '|') => state = Value(Text(Between)),
-            (Value(Text(VariableDone)), c) => return Err(Error::IllegalCharacter {
+            (Value(Text(VariableDone)), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
                 col: column_counter
             }),
+            (Value(Text(VariableDone)), c) => {
+                value.push(c);
+                state = Value(Text(Variable));
+            }
             (Value(Text(Between)), '"') => state = Value(Text(Literal)),
             (Value(Text(Between)), '|') => state = Value(Text(VariableStart)),
             (Value(Text(Between)), c) if c.is_whitespace() => {
@@ -439,7 +463,9 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
             }
             (Value(Text(Between)), ';') => {
                 state = KeyStart;
-                incomplete_strings.insert(key, string_elements);
+                let mut all_keys: Vec<String> = structs.iter().map(|(_, k, _)| k.clone()).collect();
+                all_keys.push(key);
+                incomplete_strings.insert(all_keys.join("."), string_elements);
                 string_elements = Vec::new();
                 key = String::new();
             }
@@ -476,10 +502,9 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                         error: e
                     })
                 };
-                elements.insert(key, num);
+                current_struct.insert(key, num);
                 key = String::new();
                 value = String::new();
-                state = ValueDone;
             }
             (Value(Forced(_)), c) => return Err(Error::IllegalCharacter {
                 char: c,
@@ -500,15 +525,19 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
             })
         }
     }
-    if state != KeyStart {
+    if state != KeyStart || !structs.is_empty() {
         return Err(Error::UnexpectedEOF);
     }
+    let mut pml_struct = PmlStruct{
+        elements: current_struct, 
+        own_val: None
+    };
     for (name, inc_str) in &incomplete_strings {
         let mut names = HashSet::new();
         names.insert(name);
         let dependencies: HashSet<&String> = inc_str.iter().filter(|(state, _)| *state==TextState::Variable).map(|(_, val)| val).collect();
         for dependency in &dependencies {
-            match elements.get(*dependency) {
+            match pml_struct.get::<String>(dependency) {
                 Some(_) => (),
                 None => match incomplete_strings.get(*dependency) {
                     Some(_) => (),
@@ -520,6 +549,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
             return Err(Error::CircularDependency(names.iter().map(|s| (*s).to_string()).collect()));
         }
     }
+    let mut complete_strings: HashMap<String, Element> = HashMap::new();
     while !incomplete_strings.is_empty() {
         let mut incomplete_strings_2: HashMap<String, Vec<(TextState, String)>> = HashMap::new();
         for (key, inc_str) in incomplete_strings {
@@ -529,9 +559,13 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 match state {
                     TextState::Literal => accum_str.push_str(&value),
                     TextState::Variable => {
-                        if let Some(val) = elements.get(&value) {
+                        if let Some(val) = pml_struct.get::<String>(&value) {
+                            accum_str.push_str(&val);
+                        }
+                        else if let Some(val) = complete_strings.get(&value) {
                             accum_str.push_str(&val.to_string());
-                        } else {
+                        }
+                        else {
                             split.push((TextState::Literal, accum_str));
                             accum_str = String::new();
                             split.push((TextState::Variable, value));
@@ -541,7 +575,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 }
             }
             if split.is_empty() {
-                elements.insert(key, accum_str.into());
+                complete_strings.insert(key, accum_str.into());
             }
             else {
                 split.push((TextState::Literal, accum_str));
@@ -550,7 +584,10 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
         }
         incomplete_strings = incomplete_strings_2;
     }
-    Ok(PmlStruct {elements})
+    for (cstr, celem) in complete_strings {
+        pml_struct.add(cstr, celem)?;
+    }
+    Ok(pml_struct)
 }
 
 fn check_circular_depedencies<'a>(names: &mut HashSet<&'a String>, dependencies: HashSet<&'a String>, incomplete_strings: &'a HashMap<String, Vec<(TextState, String)>>) -> bool {

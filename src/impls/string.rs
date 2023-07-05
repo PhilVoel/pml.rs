@@ -26,7 +26,8 @@ impl From<&Element> for String {
             Element::PmlU128(i) => i.to_string(),
             Element::PmlF32(f) => f.to_string(),
             Element::PmlF64(f) => f.to_string(),
-            Element::IncompleteString(_) => panic!("Not a string")
+            Element::IncompleteString(_) => panic!("Not a string"),
+            Element::PmlStruct(_) => todo!(),
         }
     }
 }
