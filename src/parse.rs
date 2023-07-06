@@ -610,7 +610,7 @@ fn check_circular_depedencies<'a>(names: &mut HashSet<&'a String>, dependencies:
 }
 
 fn is_char_reserved(c: char) -> bool {
-    ['=', ';', ',', '<', '>', '{', '}', '(', ')', '"', '\n', '[', ']', ':', '|', '.'].into_iter().any(|r| r == c)
+    ['=', ';', ',', '<', '>', '{', '}', '(', ')', '"', '[', ']', ':', '|', '.', '+'].into_iter().any(|r| r == c)
 }
 
 fn disable_decimal_point(t: ForcedNumberCategory) -> ForcedNumberCategory {
