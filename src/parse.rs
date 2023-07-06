@@ -423,16 +423,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 string_elements.push((Literal, structs.iter().nth_back(n-2).unwrap().1.clone()));
                 state = Value(Text(Between));
             }
-            (Value(Text(VariableStart(n))), '.') => {
-                if *n > structs.len()+1 {
-                    return Err(Error::IllegalCharacter{
-                        char: '.',
-                        line: line_counter,
-                        col: column_counter
-                    });
-                }
-                state = Value(Text(VariableStart(n+1)));
-            }
+            (Value(Text(VariableStart(n))), '.') if *n <= structs.len() => state = Value(Text(VariableStart(n+1))),
             (Value(Text(VariableStart(_))), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
