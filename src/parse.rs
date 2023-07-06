@@ -6,7 +6,7 @@ use crate::{Element, PmlStruct, Error, ParseNumberError};
 pub enum TextState {
     Literal,
     LiteralEscaped,
-    VariableStart,
+    VariableStart(usize),
     Variable,
     VariableDone,
     Between
@@ -167,7 +167,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 }
             }
             (ValueStart, '<') => state = ValueForceStart,
-            (ValueStart, '|') => state = Value(Text(VariableStart)),
+            (ValueStart, '|') => state = Value(Text(VariableStart(0))),
             (ValueStart, '"') => state = Value(Text(Literal)),
             (ValueStart, '{') => {
                 state = KeyStart;
@@ -401,18 +401,52 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     c => c
                 });
             }
-            (Value(Text(VariableStart)), c) if c.is_whitespace() => {
+            (Value(Text(VariableStart(0))), c) if c.is_whitespace() => {
                 if c == '\n' {
                     line_counter += 1;
                     column_counter = 0;
                 }
             }
-            (Value(Text(VariableStart)), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+            (Value(Text(VariableStart(1))), c) if c.is_whitespace() => {
+                state = Value(Text(VariableDone));
+                string_elements.push((Literal, key.clone()));
+            }
+            (Value(Text(VariableStart(n))), c) if c.is_whitespace() => {
+                string_elements.push((Literal, structs.iter().nth_back(n-2).unwrap().1.clone()));
+                state = Value(Text(VariableDone));
+            }
+            (Value(Text(VariableStart(1))), '|') => {
+                state = Value(Text(Between));
+                string_elements.push((Literal, key.clone()));
+            }
+            (Value(Text(VariableStart(n @ (2..)))), '|') => {
+                string_elements.push((Literal, structs.iter().nth_back(n-2).unwrap().1.clone()));
+                state = Value(Text(Between));
+            }
+            (Value(Text(VariableStart(n))), '.') => {
+                if *n > structs.len()+1 {
+                    return Err(Error::IllegalCharacter{
+                        char: '.',
+                        line: line_counter,
+                        col: column_counter
+                    });
+                }
+                state = Value(Text(VariableStart(n+1)));
+            }
+            (Value(Text(VariableStart(_))), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
                 col: column_counter
             }),
-            (Value(Text(VariableStart)), c) => {
+            (Value(Text(VariableStart(0))), c) => {
+                value.push(c);
+                state = Value(Text(Variable));
+            }
+            (Value(Text(VariableStart(n))), c) => {
+                if *n <= structs.len() {
+                    value = structs.iter().map(|(_, s)| s.clone()).skip(structs.len()-n).collect::<Vec<String>>().join(".");
+                    value.push('.');
+                }
                 value.push(c);
                 state = Value(Text(Variable));
             }
@@ -432,7 +466,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
             }
             (Value(Text(Variable)), '.') => value.push('.'),
             (Value(Text(Variable)), ',') => {
-                state = Value(Text(VariableDone));
+                state = Value(Text(VariableStart(0)));
                 string_elements.push((Variable, value));
                 value = String::new();
             }
@@ -449,14 +483,14 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 }
             }
             (Value(Text(VariableDone)), '|') => state = Value(Text(Between)),
-            (Value(Text(VariableDone)), ',') => state = Value(Text(VariableStart)),
+            (Value(Text(VariableDone)), ',') => state = Value(Text(VariableStart(0))),
             (Value(Text(VariableDone)), c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
                 col: column_counter
             }),
             (Value(Text(Between)), '"') => state = Value(Text(Literal)),
-            (Value(Text(Between)), '|') => state = Value(Text(VariableStart)),
+            (Value(Text(Between)), '|') => state = Value(Text(VariableStart(0))),
             (Value(Text(Between)), c) if c.is_whitespace() => {
                 if c == '\n' {
                     line_counter +=1;
