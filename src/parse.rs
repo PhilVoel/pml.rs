@@ -109,13 +109,6 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
             },
             (KeyStart, '}') if !structs.is_empty() => {
                 let (mut parent, key) = structs.pop().unwrap();
-                if current_struct.is_empty() {
-                    return Err(Error::EmptyStruct {
-                        key,
-                        closing_line: line_counter,
-                        closing_col: column_counter
-                    })
-                }
                 parent.insert(key, current_struct.into());
                 current_struct = parent;
             }

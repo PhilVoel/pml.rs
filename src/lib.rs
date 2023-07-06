@@ -46,11 +46,6 @@ pub enum Error {
         line: u32
     },
     CircularDependency(Vec<String>),
-    EmptyStruct{
-        key: String,
-        closing_line: u32,
-        closing_col: u32
-    },
     FileAccess(IoError),
     InvalidKey,
     IllegalCharacter{
