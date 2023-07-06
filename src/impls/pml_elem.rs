@@ -1,5 +1,5 @@
 use core::fmt::Display;
-use crate::Element::{self, PmlString, PmlBool, PmlI128, PmlI64, PmlI32, PmlI16, PmlI8, PmlU128, PmlU64, PmlU32, PmlU16, PmlU8, PmlF64, PmlF32, IncompleteString};
+use crate::Element::{self, PmlStruct, PmlString, PmlBool, PmlI128, PmlI64, PmlI32, PmlI16, PmlI8, PmlU128, PmlU64, PmlU32, PmlU16, PmlU8, PmlF64, PmlF32, IncompleteString};
 use std::fmt::{Formatter, Result, Error};
 
 impl Display for Element {
@@ -20,7 +20,7 @@ impl Display for Element {
             PmlF64(n) => write!(f, "{n}"),
             PmlF32(n) => write!(f, "{n}"),
             IncompleteString(_) => Err(Error),
-            Element::PmlStruct(_) => todo!(),
+            PmlStruct(s) => write!(f, "{s:#?}"),
         }
     }
 }

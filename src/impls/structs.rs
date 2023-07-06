@@ -1,5 +1,5 @@
 use crate::{Element, PmlStruct};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::{Formatter, Result, Display}};
 
 impl From<HashMap<String, Element>> for Element {
     fn from(elements: HashMap<String, Element>) -> Self {
@@ -13,7 +13,13 @@ impl<'a> From<&'a Element> for &'a Box<PmlStruct> {
             s
         }
         else {
-            todo!()
+            panic!("Not a struct");
         }
+    }
+}
+
+impl Display for PmlStruct {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{:#?}", self.elements)
     }
 }
