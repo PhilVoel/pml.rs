@@ -431,6 +431,11 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 }
             }
             (Value(Text(Variable)), '.') => value.push('.'),
+            (Value(Text(Variable)), ',') => {
+                state = Value(Text(VariableDone));
+                string_elements.push((Variable, value));
+                value = String::new();
+            }
             (Value(Text(Variable)), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
@@ -444,15 +449,12 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 }
             }
             (Value(Text(VariableDone)), '|') => state = Value(Text(Between)),
-            (Value(Text(VariableDone)), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+            (Value(Text(VariableDone)), ',') => state = Value(Text(VariableStart)),
+            (Value(Text(VariableDone)), c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
                 col: column_counter
             }),
-            (Value(Text(VariableDone)), c) => {
-                value.push(c);
-                state = Value(Text(Variable));
-            }
             (Value(Text(Between)), '"') => state = Value(Text(Literal)),
             (Value(Text(Between)), '|') => state = Value(Text(VariableStart)),
             (Value(Text(Between)), c) if c.is_whitespace() => {
