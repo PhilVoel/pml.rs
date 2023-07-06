@@ -30,7 +30,6 @@ use elem::Element;
 #[derive(Clone, Debug)]
 pub struct PmlStruct {
     elements: HashMap<String, Element>,
-    own_val: Option<Element>
 }
 
 #[derive(Debug)]
@@ -53,6 +52,7 @@ pub enum Error {
         closing_col: u32
     },
     FileAccess(IoError),
+    InvalidKey,
     IllegalCharacter{
         char: char,
         line: u32,
@@ -80,9 +80,6 @@ impl<'a> PmlStruct {
         where
         T: From<&'a Element>
         {
-            if key.is_empty() {
-                return Some(T::from(self.own_val.as_ref()?));
-            }
             match key.split_once('.') {
                 None => self.elements.get(key).map(|elem| T::from(elem)),
                 Some((first, rest)) => match self.elements.get(first)? {
@@ -96,6 +93,9 @@ impl<'a> PmlStruct {
         where
         T: Into<Element>
         {
+            if key.starts_with('.') || key.ends_with('.') || key.is_empty() {
+                return Err(Error::InvalidKey);
+            }
             match key.split_once('.') {
                 None => {
                     match self.elements.insert(key.clone(), elem.into()) {

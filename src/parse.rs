@@ -87,7 +87,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
     use ForcedSigned::{I8, I16, I32, I64, I128};
     use ForcedUnsigned::{U8, U16, U32, U64, U128};
 
-    let mut structs: Vec<(HashMap<String, Element>, String, Option<Element>)> = Vec::new();
+    let mut structs: Vec<(HashMap<String, Element>, String)> = Vec::new();
     let mut current_struct= HashMap::new();
     let mut string_elements: Vec<(TextState, String)> = Vec::new();
     let mut incomplete_strings: HashMap<String, Vec<(TextState, String)>> = HashMap::new();
@@ -108,7 +108,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 }
             },
             (KeyStart, '}') if !structs.is_empty() => {
-                let (mut parent, key, own_val) = structs.pop().unwrap();
+                let (mut parent, key) = structs.pop().unwrap();
                 if current_struct.is_empty() {
                     return Err(Error::EmptyStruct {
                         key,
@@ -116,7 +116,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                         closing_col: column_counter
                     })
                 }
-                parent.insert(key, (current_struct, own_val).into());
+                parent.insert(key, current_struct.into());
                 current_struct = parent;
             }
             (KeyStart, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
@@ -171,7 +171,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
             (ValueStart, '"') => state = Value(Text(Literal)),
             (ValueStart, '{') => {
                 state = KeyStart;
-                structs.push((current_struct, key, None));
+                structs.push((current_struct, key));
                 key = String::new();
                 current_struct = HashMap::new();
             }
@@ -465,7 +465,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
             }
             (Value(Text(Between)), ';') => {
                 state = KeyStart;
-                let mut all_keys: Vec<String> = structs.iter().map(|(_, k, _)| k.clone()).collect();
+                let mut all_keys: Vec<String> = structs.iter().map(|(_, k)| k.clone()).collect();
                 all_keys.push(key);
                 incomplete_strings.insert(all_keys.join("."), string_elements);
                 string_elements = Vec::new();
@@ -530,10 +530,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
     if state != KeyStart || !structs.is_empty() {
         return Err(Error::UnexpectedEOF);
     }
-    let mut pml_struct = PmlStruct{
-        elements: current_struct, 
-        own_val: None
-    };
+    let mut pml_struct = PmlStruct{elements: current_struct};
     for (name, inc_str) in &incomplete_strings {
         let mut names = HashSet::new();
         names.insert(name);
