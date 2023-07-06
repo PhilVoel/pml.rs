@@ -435,7 +435,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
             }
             (Value(Text(VariableStart(n))), c) => {
                 if *n <= structs.len() {
-                    value = structs.iter().map(|(_, s)| s.clone()).skip(structs.len()-n).collect::<Vec<String>>().join(".");
+                    value = structs.iter().take(structs.len()+1-n).map(|(_, s)| s.clone()).collect::<Vec<String>>().join(".");
                     value.push('.');
                 }
                 value.push(c);
