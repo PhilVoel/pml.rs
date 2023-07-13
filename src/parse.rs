@@ -113,7 +113,8 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
     let mut line_counter: u32 = 1;
     let mut column_counter: u32 = 0;
 
-    for current_char in string.chars() {
+    let mut characters = string.chars();
+    while let Some(current_char) = characters.next() {
         column_counter += 1;
         match (&state, current_char) {
             (KeyStart, c) if c.is_whitespace() => {
