@@ -4,11 +4,10 @@ mod impls;
 pub mod parse;
 
 mod elem {
-    use crate::parse::TextState;
     #[derive(Debug, Clone)]
     pub enum Element {
         PmlStruct(Box<crate::PmlStruct>),
-        IncompleteString(Vec<(String, TextState)>),
+        IncompleteString(Vec<(String, crate::parse::IncompleteStringState)>),
         PmlString(String),
         PmlBool(bool),
         PmlI128(i128),

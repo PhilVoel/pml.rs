@@ -3,19 +3,32 @@ use std::collections::{HashMap, HashSet};
 use crate::{Element, PmlStruct, Error, ParseNumberError};
 
 #[derive(PartialEq, Debug, Copy, Clone)]
-pub enum TextState {
+enum TextState {
     Literal,
     LiteralEscaped,
-    VariableStart(usize),
-    Variable,
+    VariableBeforeStart,
+    VariableStart(KeyType, usize),
+    Variable(KeyType),
     VariableDone,
     Between
+}
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub enum IncompleteStringState {
+    Literal,
+    Variable
+}
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+enum KeyType {
+    Quotes,
+    NoQuotes
 }
 
 #[derive(PartialEq, Debug)]
 enum ParseState {
     KeyStart,
-    Key,
+    Key(KeyType),
     KeyDone,
     ValueStart,
     ValueForceStart,
@@ -80,8 +93,10 @@ pub fn file(file: &str) -> Result<PmlStruct, Error> {
 fn parse_string(string: &str) -> Result<PmlStruct, Error> {
     use ParseState::{KeyStart, Key, KeyDone, ValueStart, ValueForceStart, ValueForce, ValueForceDone, ValueAfterForce, Value, ValueDone};
     use ValueType::{Text, Bool, Number, Forced};
-    use TextState::{Literal, LiteralEscaped, VariableStart, Variable, VariableDone, Between};
+    use TextState::{Literal, LiteralEscaped, VariableBeforeStart, VariableStart, Variable, VariableDone, Between};
     use NumberType::{Signed, Unsigned, Decimal};
+    use IncompleteStringState as ISS;
+    use KeyType::{Quotes, NoQuotes};
     use ForcedNumberCategory as FNC;
     use ForcedDecimal::{F32, F64};
     use ForcedSigned::{I8, I16, I32, I64, I128};
@@ -89,8 +104,8 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
 
     let mut structs: Vec<(HashMap<String, Element>, String)> = Vec::new();
     let mut current_struct= HashMap::new();
-    let mut string_elements: Vec<(TextState, String)> = Vec::new();
-    let mut incomplete_strings: HashMap<String, Vec<(TextState, String)>> = HashMap::new();
+    let mut string_elements: Vec<(IncompleteStringState, String)> = Vec::new();
+    let mut incomplete_strings: HashMap<String, Vec<(IncompleteStringState, String)>> = HashMap::new();
     let mut state = KeyStart;
     let mut key = String::new();
     let mut value = String::new();
@@ -112,20 +127,21 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 parent.insert(key, current_struct.into());
                 current_struct = parent;
             }
+            (KeyStart, '"') => state = Key(Quotes),
             (KeyStart, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
                 col: column_counter
             }),
             (KeyStart, c) => {
-                state = Key;
+                state = Key(NoQuotes);
                 key.push(c);
             }
-            (Key, '=') => match current_struct.get(&key) {
+            (Key(NoQuotes), '=') => match current_struct.get(&key) {
                 None => state = ValueStart,
                 Some(old_val) => return Err(Error::AlreadyExists{key, old_val: old_val.clone(), line: line_counter})
             }
-            (Key, c) if c.is_whitespace() => match current_struct.get(&key) {
+            (Key(NoQuotes), c) if c.is_whitespace() => match current_struct.get(&key) {
                 None => {
                     state = KeyDone;
                     if c == '\n' {
@@ -135,12 +151,19 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 }
                 Some(old_val) => return Err(Error::AlreadyExists{key, old_val: old_val.clone(), line: line_counter})
             }
-            (Key, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+            (Key(Quotes), '"') => state = KeyDone,
+            (Key(Quotes), ' ') => key.push(' '),
+            (Key(Quotes), c) if c.is_whitespace() => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
                 col: column_counter
             }),
-            (Key, c) => key.push(c),
+            (Key(_), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (Key(_), c) => key.push(c),
             (KeyDone, '=') => state = ValueStart,
             (KeyDone, c) if c.is_whitespace() => {
                 if c == '\n' {
@@ -160,7 +183,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 }
             }
             (ValueStart, '<') => state = ValueForceStart,
-            (ValueStart, '|') => state = Value(Text(VariableStart(0))),
+            (ValueStart, '|') => state = Value(Text(VariableBeforeStart)),
             (ValueStart, '"') => state = Value(Text(Literal)),
             (ValueStart, '{') => {
                 state = KeyStart;
@@ -378,10 +401,10 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 line: line_counter,
                 col: column_counter
             }),
-            (Value(Text(Literal)), '\\') => state = Value(Text(Literal)),
+            (Value(Text(Literal)), '\\') => state = Value(Text(LiteralEscaped)),
             (Value(Text(Literal)), '"') => {
                 state = Value(Text(Between));
-                string_elements.push((Literal, value));
+                string_elements.push((ISS::Literal, value));
                 value = String::new();
             }
             (Value(Text(Literal)), c) => value.push(c),
@@ -394,72 +417,97 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     c => c
                 });
             }
-            (Value(Text(VariableStart(0))), c) if c.is_whitespace() => {
+            (Value(Text(VariableBeforeStart)), c) if c.is_whitespace() => {
                 if c == '\n' {
                     line_counter += 1;
                     column_counter = 0;
                 }
             }
-            (Value(Text(VariableStart(1))), c) if c.is_whitespace() => {
-                state = Value(Text(VariableDone));
-                string_elements.push((Literal, key.clone()));
-            }
-            (Value(Text(VariableStart(n))), c) if c.is_whitespace() => {
-                string_elements.push((Literal, structs.iter().nth_back(n-2).unwrap().1.clone()));
-                state = Value(Text(VariableDone));
-            }
-            (Value(Text(VariableStart(1))), '|') => {
-                state = Value(Text(Between));
-                string_elements.push((Literal, key.clone()));
-            }
-            (Value(Text(VariableStart(n @ (2..)))), '|') => {
-                string_elements.push((Literal, structs.iter().nth_back(n-2).unwrap().1.clone()));
-                state = Value(Text(Between));
-            }
-            (Value(Text(VariableStart(n))), '.') if *n <= structs.len() => state = Value(Text(VariableStart(n+1))),
-            (Value(Text(VariableStart(_))), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+            (Value(Text(VariableBeforeStart)), '"') => state = Value(Text(VariableStart(Quotes, 0))),
+            (Value(Text(VariableBeforeStart)), '|') => state = Value(Text(Between)),
+            (Value(Text(VariableBeforeStart)), '.') => state = Value(Text(VariableStart(NoQuotes, 1))),
+            (Value(Text(VariableBeforeStart)), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
                 col: column_counter
             }),
-            (Value(Text(VariableStart(0))), c) => {
-                value.push(c);
-                state = Value(Text(Variable));
+            (Value(Text(VariableBeforeStart)), c) => {
+                state = Value(Text(Variable(NoQuotes)));
+                key.push(c);
             }
-            (Value(Text(VariableStart(n))), c) => {
+            (Value(Text(VariableStart(NoQuotes, 1))), c) if c.is_whitespace() => {
+                state = Value(Text(VariableDone));
+                string_elements.push((ISS::Literal, key.clone()));
+            }
+            (Value(Text(VariableStart(NoQuotes, n))), c) if c.is_whitespace() => {
+                string_elements.push((ISS::Literal, structs.iter().nth_back(n-2).unwrap().1.clone()));
+                state = Value(Text(VariableDone));
+            }
+            (Value(Text(VariableStart(NoQuotes, 1))), '|') => {
+                state = Value(Text(Between));
+                string_elements.push((ISS::Literal, key.clone()));
+            }
+            (Value(Text(VariableStart(NoQuotes, n @ (2..)))), '|') => {
+                string_elements.push((ISS::Literal, structs.iter().nth_back(n-2).unwrap().1.clone()));
+                state = Value(Text(Between));
+            }
+            (Value(Text(VariableStart(Quotes, 1))), '"') => {
+                state = Value(Text(VariableDone));
+                string_elements.push((ISS::Literal, key.clone()));
+            }
+            (Value(Text(VariableStart(Quotes, n @ (2..)))), '"') => {
+                string_elements.push((ISS::Literal, structs.iter().nth_back(n-2).unwrap().1.clone()));
+                state = Value(Text(VariableDone));
+            }
+            (Value(Text(VariableStart(s, n))), '.') if *n <= structs.len() => state = Value(Text(VariableStart(*s, n+1))),
+            (Value(Text(VariableStart(_, _))), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+                char: c,
+                line: line_counter,
+                col: column_counter
+            }),
+            (Value(Text(VariableStart(s, 0))), c) => {
+                value.push(c);
+                state = Value(Text(Variable(*s)));
+            }
+            (Value(Text(VariableStart(s, n))), c) => {
                 if *n <= structs.len() {
                     value = structs.iter().take(structs.len()+1-n).map(|(_, s)| s.clone()).collect::<Vec<String>>().join(".");
                     value.push('.');
                 }
                 value.push(c);
-                state = Value(Text(Variable));
+                state = Value(Text(Variable(*s)));
             }
-            (Value(Text(Variable)), '|') => {
-                string_elements.push((Variable, value));
+            (Value(Text(Variable(NoQuotes))), '|') => {
+                string_elements.push((ISS::Variable, value));
                 value = String::new();
                 state = Value(Text(Between));
             }
-            (Value(Text(Variable)), c) if c.is_whitespace() => {
+            (Value(Text(Variable(Quotes))), '"') => {
+                string_elements.push((ISS::Variable, value));
+                value = String::new();
                 state = Value(Text(VariableDone));
-                string_elements.push((Variable, value));
+            }
+            (Value(Text(Variable(NoQuotes))), c) if c.is_whitespace() => {
+                state = Value(Text(VariableDone));
+                string_elements.push((ISS::Variable, value));
                 value = String::new();
                 if c == '\n' {
                     line_counter += 1;
                     column_counter = 0;
                 }
             }
-            (Value(Text(Variable)), '.') => value.push('.'),
-            (Value(Text(Variable)), ',') => {
-                state = Value(Text(VariableStart(0)));
-                string_elements.push((Variable, value));
+            (Value(Text(Variable(_))), '.') => value.push('.'),
+            (Value(Text(Variable(NoQuotes))), ',') => {
+                state = Value(Text(VariableBeforeStart));
+                string_elements.push((ISS::Variable, value));
                 value = String::new();
             }
-            (Value(Text(Variable)), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
+            (Value(Text(Variable(_))), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
                 col: column_counter
             }),
-            (Value(Text(Variable)), c) => value.push(c),
+            (Value(Text(Variable(_))), c) => value.push(c),
             (Value(Text(VariableDone)), c) if c.is_whitespace() => {
                 if c == '\n' {
                     line_counter += 1;
@@ -467,14 +515,14 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 }
             }
             (Value(Text(VariableDone)), '|') => state = Value(Text(Between)),
-            (Value(Text(VariableDone)), ',') => state = Value(Text(VariableStart(0))),
+            (Value(Text(VariableDone)), ',') => state = Value(Text(VariableBeforeStart)),
             (Value(Text(VariableDone)), c) => return Err(Error::IllegalCharacter {
                 char: c,
                 line: line_counter,
                 col: column_counter
             }),
             (Value(Text(Between)), '"') => state = Value(Text(Literal)),
-            (Value(Text(Between)), '|') => state = Value(Text(VariableStart(0))),
+            (Value(Text(Between)), '|') => state = Value(Text(VariableBeforeStart)),
             (Value(Text(Between)), c) if c.is_whitespace() => {
                 if c == '\n' {
                     line_counter +=1;
@@ -552,7 +600,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
     for (name, inc_str) in &incomplete_strings {
         let mut names = HashSet::new();
         names.insert(name);
-        let dependencies: HashSet<&String> = inc_str.iter().filter(|(state, _)| *state==TextState::Variable).map(|(_, val)| val).collect();
+        let dependencies: HashSet<&String> = inc_str.iter().filter(|(state, _)| *state==ISS::Variable).map(|(_, val)| val).collect();
         for dependency in &dependencies {
             match pml_struct.get::<String>(dependency) {
                 Some(_) => (),
@@ -568,14 +616,14 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
     }
     let mut complete_strings: HashMap<String, Element> = HashMap::new();
     while !incomplete_strings.is_empty() {
-        let mut incomplete_strings_2: HashMap<String, Vec<(TextState, String)>> = HashMap::new();
+        let mut incomplete_strings_2: HashMap<String, Vec<(IncompleteStringState, String)>> = HashMap::new();
         for (key, inc_str) in incomplete_strings {
             let mut accum_str = String::new();
-            let mut split: Vec<(TextState, String)> = Vec::new();
+            let mut split: Vec<(IncompleteStringState, String)> = Vec::new();
             for (state, value) in inc_str {
                 match state {
-                    TextState::Literal => accum_str.push_str(&value),
-                    TextState::Variable => {
+                    ISS::Literal => accum_str.push_str(&value),
+                    ISS::Variable => {
                         if let Some(val) = pml_struct.get::<String>(&value) {
                             accum_str.push_str(&val);
                         }
@@ -583,19 +631,18 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                             accum_str.push_str(&val.to_string());
                         }
                         else {
-                            split.push((TextState::Literal, accum_str));
+                            split.push((ISS::Literal, accum_str));
                             accum_str = String::new();
-                            split.push((TextState::Variable, value));
+                            split.push((ISS::Variable, value));
                         }
-                    },
-                    _ => ()
+                    }
                 }
             }
             if split.is_empty() {
                 complete_strings.insert(key, accum_str.into());
             }
             else {
-                split.push((TextState::Literal, accum_str));
+                split.push((ISS::Literal, accum_str));
                 incomplete_strings_2.insert(key, split);
             }
         }
@@ -607,7 +654,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
     Ok(pml_struct)
 }
 
-fn check_circular_depedencies<'a>(names: &mut HashSet<&'a String>, dependencies: HashSet<&'a String>, incomplete_strings: &'a HashMap<String, Vec<(TextState, String)>>) -> bool {
+fn check_circular_depedencies<'a>(names: &mut HashSet<&'a String>, dependencies: HashSet<&'a String>, incomplete_strings: &'a HashMap<String, Vec<(IncompleteStringState, String)>>) -> bool {
     for dependency in dependencies {
         if names.contains(&dependency) {
             return true;
@@ -616,7 +663,7 @@ fn check_circular_depedencies<'a>(names: &mut HashSet<&'a String>, dependencies:
             None => (),
             Some(vec) => {
                 names.insert(dependency);
-                let dependencies: HashSet<&String> = vec.iter().filter(|(state, _)| *state==TextState::Variable).map(|(_, val)| val).collect();
+                let dependencies: HashSet<&String> = vec.iter().filter(|(state, _)| *state==IncompleteStringState::Variable).map(|(_, val)| val).collect();
                 if check_circular_depedencies(names, dependencies, incomplete_strings) {
                     return true;
                 }
