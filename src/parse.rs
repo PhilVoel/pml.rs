@@ -85,6 +85,29 @@ enum ForcedUnsigned {
     U128
 }
 
+struct Position {
+    line: u32,
+    col: u32
+}
+
+impl Position {
+    fn init() -> Self {
+        Self {
+            line: 1,
+            col: 0
+        }
+    }
+
+    fn next_line(&mut self) {
+        self.line += 1;
+        self.col = 0;
+    }
+
+    fn next(&mut self) {
+        self.col += 1;
+    }
+}
+
 pub fn file(file: &str) -> Result<PmlStruct, Error> {
     let file_content = fs::read_to_string(file)?;
     parse_string(&file_content)
@@ -110,79 +133,49 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
     let mut key = String::new();
     let mut value = String::new();
     let mut force = String::new();
-    let mut line_counter: u32 = 1;
-    let mut column_counter: u32 = 0;
+    let mut position = Position::init();
 
     let mut characters = string.chars();
     while let Some(current_char) = characters.next() {
-        column_counter += 1;
+        position.next();
         match (&state, current_char) {
-            (KeyStart, c) if c.is_whitespace() => {
-                if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
-                }
-            },
+            (KeyStart, '\n') => position.next_line(),
+            (KeyStart, c) if c.is_whitespace() => (),
             (KeyStart, '}') if !structs.is_empty() => {
                 let (mut parent, key) = structs.pop().unwrap();
                 parent.insert(key, current_struct.into());
                 current_struct = parent;
             }
             (KeyStart, '"') => state = Key(Quotes),
-            (KeyStart, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (KeyStart, c) if is_char_reserved(c) => return Err(illegal_char_err(c, position)),
             (KeyStart, c) => {
                 state = Key(NoQuotes);
                 key.push(c);
             }
             (Key(NoQuotes), '=') => match current_struct.get(&key) {
                 None => state = ValueStart,
-                Some(old_val) => return Err(Error::AlreadyExists{key, old_val: old_val.clone(), line: line_counter})
+                Some(old_val) => return Err(Error::AlreadyExists{key, old_val: old_val.clone(), line: position.line})
             }
             (Key(NoQuotes), c) if c.is_whitespace() => match current_struct.get(&key) {
                 None => {
                     state = KeyDone;
                     if c == '\n' {
-                        line_counter += 1;
-                        column_counter = 0;
+                        position.next_line();
                     }
                 }
-                Some(old_val) => return Err(Error::AlreadyExists{key, old_val: old_val.clone(), line: line_counter})
+                Some(old_val) => return Err(Error::AlreadyExists{key, old_val: old_val.clone(), line: position.line})
             }
             (Key(Quotes), '"') => state = KeyDone,
             (Key(Quotes), ' ') => key.push(' '),
-            (Key(Quotes), c) if c.is_whitespace() => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
-            (Key(_), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (Key(Quotes), c) if c.is_whitespace() => return Err(illegal_char_err(c, position)),
+            (Key(_), c) if is_char_reserved(c) => return Err(illegal_char_err(c, position)),
             (Key(_), c) => key.push(c),
             (KeyDone, '=') => state = ValueStart,
-            (KeyDone, c) if c.is_whitespace() => {
-                if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
-                }
-            },
-            (KeyDone, c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
-            (ValueStart, c) if c.is_whitespace() => {
-                if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
-                }
-            }
+            (KeyDone, '\n') => position.next_line(),
+            (KeyDone, c) if c.is_whitespace() => (),
+            (KeyDone, c) => return Err(illegal_char_err(c, position)),
+            (ValueStart, '\n') => position.next_line(),
+            (ValueStart, c) if c.is_whitespace() => (),
             (ValueStart, '<') => state = ValueForceStart,
             (ValueStart, '|') => state = Value(Text(VariableBeforeStart)),
             (ValueStart, '"') => state = Value(Text(Literal)),
@@ -200,11 +193,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 value.push('.');
                 state = Value(Number(Decimal));
             }
-            (ValueStart, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (ValueStart, c) if is_char_reserved(c) => return Err(illegal_char_err(c, position)),
             (ValueStart, c) if c.is_ascii_digit() => {
                 state = Value(Number(Unsigned));
                 value.push(c);
@@ -213,22 +202,10 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 state = Value(Bool);
                 value.push(c);
             }
-            (ValueStart, c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
-            (ValueForceStart, c) if c.is_whitespace() => {
-                if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
-                }
-            }
-            (ValueForceStart, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (ValueStart, c) => return Err(illegal_char_err(c, position)),
+            (ValueForceStart, '\n') => position.next_line(),
+            (ValueForceStart, c) if c.is_whitespace() => (),
+            (ValueForceStart, c) if is_char_reserved(c) => return Err(illegal_char_err(c, position)),
             (ValueForceStart, c) => {
                 state = ValueForce;
                 force.push(c);
@@ -257,15 +234,10 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
             (ValueForce, c) if c.is_whitespace() => {
                 state= ValueForceDone;
                 if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
+                    position.next_line();
                 }
             }
-            (ValueForce, c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (ValueForce, c) if is_char_reserved(c) => return Err(illegal_char_err(c, position)),
             (ValueForce, c) => force.push(c),
             (ValueForceDone, '>') => {
                 let force_type = match force.as_str() {
@@ -289,52 +261,28 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 state = ValueAfterForce(force_type);
                 force.clear();
             }
-            (ValueForceDone, c) if c.is_whitespace() => {
-                if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
-                }
-            }
-            (ValueForceDone, c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
-            (ValueAfterForce(_), c) if c.is_whitespace() => {
-                if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
-                }
-            }
+            (ValueForceDone, '\n') => position.next_line(),
+            (ValueForceDone, c) if c.is_whitespace() => (),
+            (ValueForceDone, c) => return Err(illegal_char_err(c, position)),
+            (ValueAfterForce(_), '\n') => position.next_line(),
+            (ValueAfterForce(_), c) if c.is_whitespace() => (),
             (ValueAfterForce(f @ FNC::Decimal(_)), '.') => {
                 value.push('.');
                 state = Value(Forced(disable_decimal_point(*f)));
             }
-            (ValueAfterForce(_), '.') => return Err(Error::IllegalCharacter {
-                char: '.',
-                line: line_counter,
-                col: column_counter
-            }),
+            (ValueAfterForce(_), '.') => return Err(illegal_char_err('.', position)),
             (ValueAfterForce(f), '-') => {
                 value.push('-');
                 state = match f {
                     FNC::Signed(_)|FNC::Decimal(_) => Value(Forced(disable_negative_sign(*f))),
-                    FNC::Unsigned(_) => return Err(Error::IllegalCharacter {
-                        char: '-',
-                        line: line_counter,
-                        col: column_counter
-                    })
+                    FNC::Unsigned(_) => return Err(illegal_char_err('-', position)),
                 }
             }
             (ValueAfterForce(f), c) if c.is_ascii_digit() => {
                 value.push(c);
                 state = Value(Forced(disable_negative_sign(*f)));
             }
-            (ValueAfterForce(_), c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (ValueAfterForce(_), c) => return Err(illegal_char_err(c, position)),
             (Value(Bool), c) => match (value.as_str(), c) {
                 #[allow(clippy::unnested_or_patterns)]
                 ("t", 'r')|
@@ -353,11 +301,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                         value = String::new();
                     }
                 }
-                _ => return Err(Error::IllegalCharacter {
-                    char: c,
-                    line: line_counter,
-                    col: column_counter
-                })
+                _ => return Err(illegal_char_err(c, position)),
             }
             (Value(Number(_)), c) if c.is_ascii_digit() => value.push(c),
             (Value(Number(Unsigned|Signed)), '.') => {
@@ -369,7 +313,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 let num = match get_number_from_string(*t, &value){
                     Ok(n) => n,
                     Err(e) => return Err(Error::ParseNumberError {
-                        line: line_counter,
+                        line: position.line,
                         value,
                         error: e
                     })
@@ -383,7 +327,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 let num = match get_number_from_string(*t, &value){
                     Ok(n) => n,
                     Err(e) => return Err(Error::ParseNumberError {
-                        line: line_counter,
+                        line: position.line,
                         value,
                         error: e
                     })
@@ -392,16 +336,11 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 key = String::new();
                 value = String::new();
                 if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
+                    position.next_line();
                 }
                 state = ValueDone;
             }
-            (Value(Number(_)), c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (Value(Number(_)), c) => return Err(illegal_char_err(c, position)),
             (Value(Text(Literal)), '\\') => state = Value(Text(LiteralEscaped)),
             (Value(Text(Literal)), '"') => {
                 state = Value(Text(Between));
@@ -418,20 +357,12 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                     c => c
                 });
             }
-            (Value(Text(VariableBeforeStart)), c) if c.is_whitespace() => {
-                if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
-                }
-            }
+            (Value(Text(VariableBeforeStart)), '\n')  => position.next_line(),
+            (Value(Text(VariableBeforeStart)), c) if c.is_whitespace() => (),
             (Value(Text(VariableBeforeStart)), '"') => state = Value(Text(VariableStart(Quotes, 0))),
             (Value(Text(VariableBeforeStart)), '|') => state = Value(Text(Between)),
             (Value(Text(VariableBeforeStart)), '.') => state = Value(Text(VariableStart(NoQuotes, 1))),
-            (Value(Text(VariableBeforeStart)), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (Value(Text(VariableBeforeStart)), c) if is_char_reserved(c) => return Err(illegal_char_err(c, position)),
             (Value(Text(VariableBeforeStart)), c) => {
                 state = Value(Text(Variable(NoQuotes)));
                 key.push(c);
@@ -461,11 +392,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 state = Value(Text(VariableDone));
             }
             (Value(Text(VariableStart(s, n))), '.') if *n <= structs.len() => state = Value(Text(VariableStart(*s, n+1))),
-            (Value(Text(VariableStart(_, _))), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (Value(Text(VariableStart(_, _))), c) if is_char_reserved(c) => return Err(illegal_char_err(c, position)),
             (Value(Text(VariableStart(s, 0))), c) => {
                 value.push(c);
                 state = Value(Text(Variable(*s)));
@@ -493,8 +420,7 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 string_elements.push((ISS::Variable, value));
                 value = String::new();
                 if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
+                    position.next_line();
                 }
             }
             (Value(Text(Variable(_))), '.') => value.push('.'),
@@ -503,33 +429,17 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 string_elements.push((ISS::Variable, value));
                 value = String::new();
             }
-            (Value(Text(Variable(_))), c) if is_char_reserved(c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (Value(Text(Variable(_))), c) if is_char_reserved(c) => return Err(illegal_char_err(c, position)),
             (Value(Text(Variable(_))), c) => value.push(c),
-            (Value(Text(VariableDone)), c) if c.is_whitespace() => {
-                if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
-                }
-            }
+            (Value(Text(VariableDone)), '\n') => position.next_line(),
+            (Value(Text(VariableDone)), c) if c.is_whitespace() => (),
             (Value(Text(VariableDone)), '|') => state = Value(Text(Between)),
             (Value(Text(VariableDone)), ',') => state = Value(Text(VariableBeforeStart)),
-            (Value(Text(VariableDone)), c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (Value(Text(VariableDone)), c) => return Err(illegal_char_err(c, position)),
             (Value(Text(Between)), '"') => state = Value(Text(Literal)),
             (Value(Text(Between)), '|') => state = Value(Text(VariableBeforeStart)),
-            (Value(Text(Between)), c) if c.is_whitespace() => {
-                if c == '\n' {
-                    line_counter +=1;
-                    column_counter = 0;
-                }
-            }
+            (Value(Text(Between)), '\n') => position.next_line(),
+            (Value(Text(Between)), c) if c.is_whitespace() => (),
             (Value(Text(Between)), ';') => {
                 state = KeyStart;
                 let mut all_keys: Vec<String> = structs.iter().map(|(_, k)| k.clone()).collect();
@@ -538,35 +448,23 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 string_elements = Vec::new();
                 key = String::new();
             }
-            (Value(Text(Between)), c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
+            (Value(Text(Between)), c) => return Err(illegal_char_err(c, position)),
             (Value(Forced(t@FNC::Decimal(F32(_, false)|F64(_, false)))), '.') => {
                 state = Value(Forced(disable_decimal_point(*t)));
                 value.push('.');
             }
-            (Value(Forced(_)), '.') => return Err(Error::IllegalCharacter {
-                char: '.',
-                line: line_counter,
-                col: column_counter
-            }),
+            (Value(Forced(_)), '.') => return Err(illegal_char_err('.', position)),
             (Value(Forced(t@(FNC::Signed(I8(false)|I16(false)|I32(false)|I64(false)|I128(false))|FNC::Decimal(F32(false, false)|F64(false, false))))), '-') => {
                 value.push('-');
                 state = Value(Forced(disable_negative_sign(*t)));
             }
-            (Value(Forced(_)), '-') => return Err(Error::IllegalCharacter {
-                char: '-',
-                line: line_counter,
-                col: column_counter
-            }),
+            (Value(Forced(_)), '-') => return Err(illegal_char_err('-', position)),
             (Value(Forced(_)), c) if c.is_ascii_digit() => value.push(c),
             (Value(Forced(f)), c) if c.is_whitespace() => {
                 let num = match get_number_from_forced(*f, &value){
                     Ok(n) => n,
                     Err(e) => return Err(Error::ParseNumberError {
-                        line: line_counter,
+                        line: position.line,
                         value,
                         error: e
                     })
@@ -575,23 +473,11 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
                 key = String::new();
                 value = String::new();
             }
-            (Value(Forced(_)), c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            }),
-            (ValueDone, c) if c.is_whitespace() => {
-                if c == '\n' {
-                    line_counter += 1;
-                    column_counter = 0;
-                }
-            }
+            (Value(Forced(_)), c) => return Err(illegal_char_err(c, position)),
+            (ValueDone, '\n') => position.next_line(),
+            (ValueDone, c) if c.is_whitespace() => (),
             (ValueDone, ';') => state = KeyStart,
-            (ValueDone, c) => return Err(Error::IllegalCharacter {
-                char: c,
-                line: line_counter,
-                col: column_counter
-            })
+            (ValueDone, c) => return Err(illegal_char_err(c, position)),
         }
     }
     if state != KeyStart || !structs.is_empty() {
@@ -653,6 +539,14 @@ fn parse_string(string: &str) -> Result<PmlStruct, Error> {
         pml_struct.add(cstr, celem)?;
     }
     Ok(pml_struct)
+}
+
+fn illegal_char_err(c: char, pos: Position) -> Error {
+    Error::IllegalCharacter {
+        char: c,
+        line: pos.line,
+        col: pos.col
+    }
 }
 
 fn check_circular_depedencies<'a>(names: &mut HashSet<&'a String>, dependencies: HashSet<&'a String>, incomplete_strings: &'a HashMap<String, Vec<(IncompleteStringState, String)>>) -> bool {
