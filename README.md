@@ -29,15 +29,25 @@ fn main() {
 testFile.pml
 
 ```pml
-age=420
-first_name = "Max"
-name = {first_name} " "{last_name}
-last_name = "Mustermann"
-stayAnonymous = true
+age= <u32> 420;
+first_name = "Max";
+"name and age" = |first_name, last_name| " "|age|;
+last_name = "Mustermann";
+stayAnonymous = true;
+friends = [
+    {
+        name= "Person";
+        past_ages= <u8> [
+            0,1,2,
+            3 , 4,5
+        ]
+    }
+    {
+        name= |..first_name|;
+        past_ages = <u8> [
+            0,1,2,3,4,
+        ]
+    }
+]
 
 ```
-
-Note that you can have strings consist of other values (It wouldn't even have to have been other strings; I could have added the age as part of the name, too!).\
-Numbers and booleans are recognized as such and numbers are saved as the most memory efficient type.\
-Whitespaces between keys, values, the equal sign and the different parts of strings do not matter at all.\
-You can get the values either as a copy/clone or as reference. If you copy/clone them you can upcast numbers to a bigger type and everything can be converted to a String.

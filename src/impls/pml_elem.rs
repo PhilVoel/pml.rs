@@ -1,6 +1,6 @@
 use core::fmt::Display;
-use crate::Element::{self, PmlStruct, PmlString, PmlBool, PmlI128, PmlI64, PmlI32, PmlI16, PmlI8, PmlU128, PmlU64, PmlU32, PmlU16, PmlU8, PmlF64, PmlF32, IncompleteString};
-use std::fmt::{Formatter, Result, Error};
+use crate::Element::{self, PmlStruct, PmlString, PmlBool, PmlI128, PmlI64, PmlI32, PmlI16, PmlI8, PmlU128, PmlU64, PmlU32, PmlU16, PmlU8, PmlF64, PmlF32, PmlArray};
+use std::fmt::{Formatter, Result};
 
 impl Display for Element {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
@@ -19,8 +19,8 @@ impl Display for Element {
             PmlU8(u) => write!(f, "{u}"),
             PmlF64(n) => write!(f, "{n}"),
             PmlF32(n) => write!(f, "{n}"),
-            IncompleteString(_) => Err(Error),
             PmlStruct(s) => write!(f, "{s:#?}"),
+            PmlArray(a) => write!(f, "{a:#?}"),
         }
     }
 }

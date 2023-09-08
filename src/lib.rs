@@ -4,24 +4,44 @@ mod impls;
 pub mod parse;
 
 mod elem {
+    use crate::PmlStruct;
+
     #[derive(Debug, Clone)]
     pub enum Element {
-        PmlStruct(Box<crate::PmlStruct>),
-        IncompleteString(Vec<(String, crate::parse::IncompleteStringState)>),
-        PmlString(String),
+        PmlArray(ArrayElement),
         PmlBool(bool),
-        PmlI128(i128),
-        PmlI64(i64),
-        PmlI32(i32),
-        PmlI16(i16),
-        PmlI8(i8),
-        PmlU128(u128),
-        PmlU64(u64),
-        PmlU32(u32),
-        PmlU16(u16),
-        PmlU8(u8),
+        PmlString(String),
+        PmlStruct(Box<PmlStruct>),
+        PmlF32(f32),
         PmlF64(f64),
-        PmlF32(f32)
+        PmlI8(i8),
+        PmlI16(i16),
+        PmlI32(i32),
+        PmlI64(i64),
+        PmlI128(i128),
+        PmlU8(u8),
+        PmlU16(u16),
+        PmlU32(u32),
+        PmlU64(u64),
+        PmlU128(u128),
+    }
+
+    #[derive(Debug, Clone)]
+    pub enum ArrayElement {
+        AString(Vec<String>),
+        APmlStruct(Vec<PmlStruct>),
+        Af32(Vec<f32>),
+        Af64(Vec<f64>),
+        Ai8(Vec<i8>),
+        Ai16(Vec<i16>),
+        Ai32(Vec<i32>),
+        Ai64(Vec<i64>),
+        Ai128(Vec<i128>),
+        Au8(Vec<u8>),
+        Au16(Vec<u16>),
+        Au32(Vec<u32>),
+        Au64(Vec<u64>),
+        Au128(Vec<u128>),
     }
 }
 use elem::Element;
@@ -41,8 +61,6 @@ pub enum ParseNumberError {
 pub enum Error {
     AlreadyExists {
         key: String,
-        old_val: Element,
-        line: u32
     },
     CircularDependency(Vec<String>),
     FileAccess(IoError),
@@ -52,6 +70,7 @@ pub enum Error {
         line: u32,
         col: u32
     },
+    IllegalDependency,
     NotAnExistingStruct(String),
     ParseNumberError{
         line: u32,
@@ -93,7 +112,7 @@ impl<'a> PmlStruct {
             match key.split_once('.') {
                 None => {
                     match self.elements.insert(key.clone(), elem.into()) {
-                        Some(old_val) => Err(Error::AlreadyExists{key, old_val, line: 0}),
+                        Some(_) => Err(Error::AlreadyExists{key}),
                         None => Ok(())
                     }
                 }

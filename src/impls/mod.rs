@@ -1,3 +1,4 @@
+mod array;
 mod bool;
 mod error;
 mod float;
@@ -6,3 +7,4 @@ mod signed;
 mod string;
 mod structs;
 mod unsigned;
+mod wip_elem;
