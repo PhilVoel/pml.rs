@@ -28,8 +28,9 @@ mod elem {
 
     #[derive(Debug, Clone)]
     pub enum ArrayElement {
-        AString(Vec<String>),
+        ABool(Vec<bool>),
         APmlStruct(Vec<PmlStruct>),
+        AString(Vec<String>),
         Af32(Vec<f32>),
         Af64(Vec<f64>),
         Ai8(Vec<i8>),

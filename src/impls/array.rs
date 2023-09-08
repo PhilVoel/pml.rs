@@ -7,15 +7,21 @@ impl Display for ArrayElement {
     }
 }
 
-impl From<Vec<String>> for Element {
-    fn from(value: Vec<String>) -> Self {
-        Self::PmlArray(ArrayElement::AString(value))
+impl From<Vec<bool>> for Element {
+    fn from(value: Vec<bool>) -> Self {
+        Self::PmlArray(ArrayElement::ABool(value))
     }
 }
 
 impl From<Vec<PmlStruct>> for Element {
     fn from(value: Vec<PmlStruct>) -> Self {
         Self::PmlArray(ArrayElement::APmlStruct(value))
+    }
+}
+
+impl From<Vec<String>> for Element {
+    fn from(value: Vec<String>) -> Self {
+        Self::PmlArray(ArrayElement::AString(value))
     }
 }
 

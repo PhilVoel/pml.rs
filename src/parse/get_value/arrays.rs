@@ -34,6 +34,22 @@ pub(super) fn structs(parse_data: &mut ParseData) -> WIPResult {
     Ok(array.into())
 }
 
+pub(super) fn bool(parse_data: &mut ParseData) -> StdResult {
+    let mut array = Vec::new();
+    while parse_data.last_char != ']' {
+        match parse_data.next_non_whitespace_peek() {
+            None => return Err(Error::UnexpectedEOF),
+            Some(']') => {
+                parse_data.next_char();
+                break;
+            }
+            Some(_) => ()
+        }
+        array.push(super::bool(parse_data, TerminatorType::Array)?);
+    }
+    Ok(array.into())
+}
+
 pub(super) fn f32(parse_data: &mut ParseData) -> StdResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {

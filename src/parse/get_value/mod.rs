@@ -379,6 +379,7 @@ pub(super) fn array(parse_data: &mut ParseData) -> WIPResult {
     match parse_data.next_non_whitespace_peek() {
         Some('|' | '"') => arrays::strings(parse_data),
         Some('{') => arrays::structs(parse_data),
+        Some('t' | 'f') => Ok(arrays::bool(parse_data)?.into()),
         Some(c) => Err(illegal_char_err(c, parse_data)),
         None => Err(Error::UnexpectedEOF)
     }
