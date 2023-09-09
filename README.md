@@ -15,7 +15,7 @@ fn main() {
 	match pml_result {
 		Err(e) => println("{e:#?}"),
 		Ok(result) => {
-			if(result.get::<bool>("stayAnonymous").is_some()) {
+			if(result.get::<bool>("stayAnonymous").is_ok()) {
 				println!("I won't tell you anything about me.");
 			}
 			else {
