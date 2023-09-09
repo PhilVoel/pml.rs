@@ -19,8 +19,8 @@ impl Display for Element {
             PmlU8(u) => write!(f, "{u}"),
             PmlF64(n) => write!(f, "{n}"),
             PmlF32(n) => write!(f, "{n}"),
-            PmlStruct(s) => write!(f, "{s:#?}"),
-            PmlArray(a) => write!(f, "{a:#?}"),
+            PmlStruct(_) |
+            PmlArray(_) => write!(f, ""),
         }
     }
 }

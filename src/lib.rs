@@ -28,21 +28,21 @@ mod elem {
 
     #[derive(Debug, Clone)]
     pub enum ArrayElement {
-        ABool(Vec<bool>),
-        APmlStruct(Vec<PmlStruct>),
-        AString(Vec<String>),
-        Af32(Vec<f32>),
-        Af64(Vec<f64>),
-        Ai8(Vec<i8>),
-        Ai16(Vec<i16>),
-        Ai32(Vec<i32>),
-        Ai64(Vec<i64>),
-        Ai128(Vec<i128>),
-        Au8(Vec<u8>),
-        Au16(Vec<u16>),
-        Au32(Vec<u32>),
-        Au64(Vec<u64>),
-        Au128(Vec<u128>),
+        PmlBool(Vec<bool>),
+        PmlStruct(Vec<PmlStruct>),
+        PmlString(Vec<String>),
+        PmlF32(Vec<f32>),
+        PmlF64(Vec<f64>),
+        PmlI8(Vec<i8>),
+        PmlI16(Vec<i16>),
+        PmlI32(Vec<i32>),
+        PmlI64(Vec<i64>),
+        PmlI128(Vec<i128>),
+        PmlU8(Vec<u8>),
+        PmlU16(Vec<u16>),
+        PmlU32(Vec<u32>),
+        PmlU64(Vec<u64>),
+        PmlU128(Vec<u128>),
     }
 }
 use elem::Element;
