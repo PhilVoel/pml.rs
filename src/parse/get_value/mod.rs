@@ -24,11 +24,11 @@ enum NumType {
 
 #[derive(Clone, Copy)]
 enum ForceCategory {
-    S8,
-    S16,
-    S32,
-    S64,
-    S128,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
     U8,
     U16,
     U32,
@@ -37,7 +37,7 @@ enum ForceCategory {
     F32,
     F64
 }
-use ForceCategory::{S8, S16, S32, S64, S128, U8, U16, U32, U64, U128, F32, F64};
+use ForceCategory::{I8, I16, I32, I64, I128, U8, U16, U32, U64, U128, F32, F64};
 
 pub(super) fn string(parse_data: &mut ParseData, terminator_type: TerminatorType) -> Result<Vec<ISElem>, Error> {
     let terminators = match terminator_type {
@@ -301,11 +301,11 @@ pub(super) fn forced(parse_data: &mut ParseData, terminator_type: TerminatorType
         match c {
             '>' => {
                 let force_type = match ftype_string.trim() {
-                    "s8" => S8,
-                    "s16" => S16,
-                    "s32" => S32,
-                    "s64" => S64,
-                    "s128" => S128,
+                    "i8" => I8,
+                    "i16" => I16,
+                    "i32" => I32,
+                    "i64" => I64,
+                    "i128" => I128,
                     "u8" => U8,
                     "u16" => U16,
                     "u32" => U32,
@@ -340,18 +340,18 @@ pub(super) fn forced(parse_data: &mut ParseData, terminator_type: TerminatorType
 
 fn parse_forced(value: &str, force_type: ForceCategory) -> Result<Element, ParseNumberError> {
     Ok(match force_type {
-        S8 => value.parse::<i8>()?.into(),
-        S16 => value.parse::<i16>()?.into(),
-        S32 => value.parse::<i32>()?.into(),
-        S64 => value.parse::<i64>()?.into(),
-        S128 => value.parse::<i128>()?.into(),
+        F32 => value.parse::<f32>()?.into(),
+        F64 => value.parse::<f64>()?.into(),
+        I8 => value.parse::<i8>()?.into(),
+        I16 => value.parse::<i16>()?.into(),
+        I32 => value.parse::<i32>()?.into(),
+        I64 => value.parse::<i64>()?.into(),
+        I128 => value.parse::<i128>()?.into(),
         U8 => value.parse::<u8>()?.into(),
         U16 => value.parse::<u16>()?.into(),
         U32 => value.parse::<u32>()?.into(),
         U64 => value.parse::<u64>()?.into(),
         U128 => value.parse::<u128>()?.into(),
-        F32 => value.parse::<f32>()?.into(),
-        F64 => value.parse::<f64>()?.into(),
     })
 }
 
@@ -359,18 +359,18 @@ fn get_forced_array(parse_data: &mut ParseData, force_type: ForceCategory) -> St
     parse_data.next_char();
     parse_data.next_non_whitespace_peek();
     match force_type {
-        S8 => arrays::s8(parse_data),        
-        S16 => arrays::s16(parse_data),        
-        S32 => arrays::s32(parse_data),        
-        S64 => arrays::s64(parse_data),        
-        S128 => arrays::s128(parse_data),        
+        F32 => arrays::f32(parse_data),
+        F64 => arrays::f64(parse_data),
+        I8 => arrays::i8(parse_data),        
+        I16 => arrays::i16(parse_data),        
+        I32 => arrays::i32(parse_data),        
+        I64 => arrays::i64(parse_data),        
+        I128 => arrays::i128(parse_data),        
         U8 => arrays::u8(parse_data),        
         U16 => arrays::u16(parse_data),        
         U32 => arrays::u32(parse_data),        
         U64 => arrays::u64(parse_data),        
         U128 => arrays::u128(parse_data),        
-        F32 => arrays::f32(parse_data),
-        F64 => arrays::f64(parse_data),
     }
 }
 
