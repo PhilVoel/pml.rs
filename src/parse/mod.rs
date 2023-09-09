@@ -407,7 +407,7 @@ fn illegal_char_err(c: char, pd: &ParseData) -> Error {
 }
 
 fn is_char_reserved(c: char) -> bool {
-    ['=', ';', ',', '<', '>', '{', '}', '(', ')', '"', '[', ']', ':', '|', '.', '+', '$'].into_iter().any(|r| r == c)
+    ['=', ';', ',', '<', '>', '{', '}', '(', ')', '"', '[', ']', ':', '|', '.', '+', '$', '!', '?', '#'].into_iter().any(|r| r == c)
 }
 
 fn get_key_value_pair(parse_data: &mut ParseData) -> Result<(String, WIPElement), Error> {
