@@ -73,9 +73,22 @@ macro_rules! generic_non_primitive {
             }
         }
 
-        impl From<Vec<$type>> for Element {
-            fn from(f: Vec<$type>) -> Self {
-                Element::PmlArray(ArrayElement::$pml_elem(f))
+        impl From<Vec<(usize, $type)>> for Element {
+            fn from(mut f: Vec<(usize, $type)>) -> Self {
+                loop {
+                    let mut done = true;
+                    for i in 0..f.len() {
+                        let id = f.get(i).expect("Index should never be out of bounds").0;
+                        if id != i {
+                            f.swap(id, i);
+                            done = false;
+                        }
+                    }
+                    if done {
+                        break;
+                    }
+                }
+                Element::PmlArray(ArrayElement::$pml_elem(f.into_iter().map(|(_,e)|e).collect()))
             }
         }
 

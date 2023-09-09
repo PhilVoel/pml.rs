@@ -6,18 +6,18 @@ mod get_value;
 pub(crate) enum WIPElement {
     Element(Element),
     IncompleteString(Vec<ISElem>),
-    StringArray(Vec<Vec<ISElem>>),
+    StringArray(Vec<(usize, Vec<ISElem>)>),
     Struct(Rc<RefCell<WIPStruct>>),
-    StructArray(Vec<Rc<RefCell<WIPStruct>>>),
+    StructArray(Vec<(usize, Rc<RefCell<WIPStruct>>)>),
 }
 
 #[derive(Debug)]
 pub(crate) struct WIPStruct {
     pub(crate) finished_elements: HashMap<String, Element>,
     inc_strings: HashMap<String, Vec<ISElem>>,
-    inc_string_arrays: HashMap<String, Vec<Vec<ISElem>>>,
+    inc_string_arrays: HashMap<String, Vec<(usize, Vec<ISElem>)>>,
     inc_structs: HashMap<String, Rc<RefCell<WIPStruct>>>,
-    inc_struct_arrays: HashMap<String, Vec<Rc<RefCell<WIPStruct>>>>,
+    inc_struct_arrays: HashMap<String, Vec<(usize, Rc<RefCell<WIPStruct>>)>>,
 }
 
 impl WIPStruct {
@@ -134,7 +134,7 @@ impl WIPStruct {
         for (key, arr) in &self.inc_string_arrays {
             let mut array_temp_not_done = Vec::new();
             let mut array_temp_done = Vec::new();
-            for inc_str in arr {
+            for (id, inc_str) in arr {
                 let mut accum_str = String::new();
                 let mut split: Vec<ISElem> = Vec::new();
                 for elem in inc_str {
@@ -169,19 +169,19 @@ impl WIPStruct {
                     }
                 }
                 if split.is_empty() {
-                    array_temp_done.push(accum_str);
+                    array_temp_done.push((*id, accum_str));
                     no_change = false;
                 }
                 else {
                     split.push(ISElem::Literal(accum_str));
-                    array_temp_not_done.push(split);
+                    array_temp_not_done.push((*id, split));
                 }
             }
             if array_temp_not_done.is_empty() {
                 self.finished_elements.insert(key.clone(), array_temp_done.into());
             }
             else {
-                array_temp_not_done.append(&mut array_temp_done.into_iter().map(|s| vec![ISElem::Literal(s)]).collect());
+                array_temp_not_done.append(&mut array_temp_done.into_iter().map(|(i,s)| (i, vec![ISElem::Literal(s)])).collect());
                 incomplete_string_arrays_temp.insert(key.to_string(), array_temp_not_done);
             }
         }
@@ -233,7 +233,7 @@ impl WIPStruct {
         let mut res = HashMap::new();
         for (key, arr) in &self.inc_struct_arrays {
             let mut temp_arr = Vec::new();
-            for s in arr {
+            for (id, s) in arr {
                 loop {
                     let (no_change, done) = s.borrow_mut().resolve_inc_strings();
                     let (no_change2, done2) = s.borrow().resolve_inc_strings_recursive();
@@ -244,7 +244,7 @@ impl WIPStruct {
                         return Err(Error::IllegalDependency)
                     }
                 }
-                temp_arr.push(s.borrow_mut().resolve_inc_structs()?);
+                temp_arr.push((*id, s.borrow_mut().resolve_inc_structs()?));
             }
             res.insert(key.clone(), temp_arr.into());
         }

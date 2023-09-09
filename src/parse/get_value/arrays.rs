@@ -3,6 +3,7 @@ use super::{get_number_type_and_string, StdResult, WIPResult};
 
 pub(super) fn strings(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
+    let mut count = 0;
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
             None => return Err(Error::UnexpectedEOF),
@@ -12,13 +13,15 @@ pub(super) fn strings(parse_data: &mut ParseData) -> WIPResult {
             }
             Some(_) => ()
         }
-        array.push(super::string(parse_data, TerminatorType::Array)?);
+        array.push((count, super::string(parse_data, TerminatorType::Array)?));
+        count += 1;
     }
     Ok(array.into())
 }
 
 pub(super) fn structs(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
+    let mut count = 0;
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
             None => return Err(Error::UnexpectedEOF),
@@ -28,8 +31,9 @@ pub(super) fn structs(parse_data: &mut ParseData) -> WIPResult {
             }
             Some(_) => ()
         }
-        array.push(super::pml_struct(parse_data)?);
+        array.push((count, super::pml_struct(parse_data)?));
         parse_data.drop_last_nested_ref();
+        count += 1;
     }
     Ok(array.into())
 }
