@@ -337,11 +337,11 @@ impl<'a> ParseData<'a> {
     }
 
     fn get_nested_key(&self, n: usize) -> String {
-        self.nested_names.iter().nth_back(n-1).unwrap().clone()
+        self.nested_names.iter().nth_back(n-1).expect("Going up too much nesting should have been caught earlier").clone()
     }
 
     fn get_struct_ref(&self, n: usize) -> Rc<RefCell<WIPStruct>> {
-        self.nested_refs.iter().nth_back(n-1).unwrap().clone()
+        self.nested_refs.iter().nth_back(n-1).expect("Going up too much nesting should have been caught earlier").clone()
     }
 
     fn get_full_struct_path(&self) -> String {
