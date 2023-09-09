@@ -1,4 +1,4 @@
-use crate::{elem::{Element, ArrayElement}, PmlStruct};
+use crate::{elem::{Element, ArrayElement}, PmlStruct, GetError};
 macro_rules! add_primitive {
     ($pml_elem:ident, $type:ty $(,$casts:ident)*) => {
         impl From<$type> for Element {
@@ -7,23 +7,25 @@ macro_rules! add_primitive {
             }
         }
 
-        impl From<&Element> for $type {
-            fn from(elem: &Element) -> Self {
+        impl TryFrom<&Element> for $type {
+            type Error = GetError;
+            fn try_from(elem: &Element) -> Result<Self, Self::Error> {
                 match elem {
-                    Element::$pml_elem(e) => *e,
+                    Element::$pml_elem(e) => Ok(*e),
                     $(
-                        Element::$casts(e) => *e as $type,
+                        Element::$casts(e) => Ok(*e as $type),
                         )*
-                        _ => panic!("Invalid Type")
+                        _ => Err(Self::Error::InvalidType)
                 }
             }
         }
 
-        impl<'a> From<&'a Element> for &'a $type {
-            fn from(elem: &'a Element) -> Self {
+        impl<'a> TryFrom<&'a Element> for &'a $type {
+            type Error = GetError;
+            fn try_from(elem: &'a Element) -> Result<Self, Self::Error> {
                 match elem {
-                    Element::$pml_elem(e) => e,
-                    _ => panic!("Invalid type")
+                    Element::$pml_elem(e) => Ok(e),
+                    _ => Err(Self::Error::InvalidType)
                 }
             }
         }
@@ -34,23 +36,25 @@ macro_rules! add_primitive {
             }
         }
 
-        impl From<&Element> for Vec<$type> {
-            fn from(elem: &Element) -> Self {
+        impl TryFrom<&Element> for Vec<$type> {
+            type Error = GetError;
+            fn try_from(elem: &Element) -> Result<Self, Self::Error> {
                 match elem {
-                    Element::PmlArray(ArrayElement::$pml_elem(e)) => e.clone(),
+                    Element::PmlArray(ArrayElement::$pml_elem(e)) => Ok(e.clone()),
                     $(
-                        Element::PmlArray(ArrayElement::$casts(e)) => e.iter().map(|n| *n as $type).collect(),
-                        )*
-                        _ => panic!("Invalid Type")
+                        Element::PmlArray(ArrayElement::$casts(e)) => Ok(e.iter().map(|n| *n as $type).collect()),
+                    )*
+                    _ => Err(Self::Error::InvalidType)
                 }
             }
         }
 
-        impl<'a> From<&'a Element> for &'a Vec<$type> {
-            fn from(elem: &'a Element) -> Self {
+        impl<'a> TryFrom<&'a Element> for &'a Vec<$type> {
+            type Error = GetError;
+            fn try_from(elem: &'a Element) -> Result<Self, Self::Error> {
                 match elem {
-                    Element::PmlArray(ArrayElement::$pml_elem(e)) => e,
-                    _ => panic!("Invalid type")
+                    Element::PmlArray(ArrayElement::$pml_elem(e)) => Ok(e),
+                    _ => Err(Self::Error::InvalidType)
                 }
             }
         }
@@ -59,11 +63,12 @@ macro_rules! add_primitive {
 
 macro_rules! generic_non_primitive {
     ($pml_elem:ident, $type:ty) => {
-        impl<'a> From<&'a Element> for &'a $type {
-            fn from(elem: &'a Element) -> Self {
+        impl<'a> TryFrom<&'a Element> for &'a $type {
+            type Error = GetError;
+            fn try_from(elem: &'a Element) -> Result<Self, Self::Error> {
                 match elem {
-                    Element::$pml_elem(f) => f,
-                    _ => panic!("Invalid type")
+                    Element::$pml_elem(f) => Ok(f),
+                    _ => Err(Self::Error::InvalidType)
                 }
             }
         }
@@ -74,11 +79,12 @@ macro_rules! generic_non_primitive {
             }
         }
 
-        impl<'a> From<&'a Element> for &'a Vec<$type> {
-            fn from(elem: &'a Element) -> Self {
+        impl<'a> TryFrom<&'a Element> for &'a Vec<$type> {
+            type Error = GetError;
+            fn try_from(elem: &'a Element) -> Result<Self, Self::Error> {
                 match elem {
-                    Element::PmlArray(ArrayElement::$pml_elem(arr)) => arr,
-                    _ => panic!("Invalid type")
+                    Element::PmlArray(ArrayElement::$pml_elem(arr)) => Ok(arr),
+                    _ => Err(Self::Error::InvalidType)
                 }
             }
         }

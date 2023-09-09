@@ -71,7 +71,7 @@ impl WIPStruct {
             let (first, rest) = key.split_once('.')?;
             let wip_struct = map.get(first)?.borrow();
             match rest.split_once('.') {
-                None => Some(wip_struct.finished_elements.get(rest)?.into()),
+                None => wip_struct.finished_elements.get(rest)?.try_into().ok(),
                 Some(_) => Self::get_as_string_from_inc_struct(&wip_struct.inc_structs, rest)
             }
     }

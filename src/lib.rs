@@ -89,16 +89,25 @@ pub enum Error {
     }
 }
 
+pub enum GetError {
+    DoesNotExits,
+    InvalidType
+}
+
 impl<'a> PmlStruct {
-    pub fn get<T>(&'a self, key: &str) -> Option<T>
+    pub fn get<T>(&'a self, key: &str) -> Result<T, GetError>
         where
-        T: From<&'a Element>
+        T: TryFrom<&'a Element, Error = GetError>
         {
             match key.split_once('.') {
-                None => self.elements.get(key).map(|elem| T::from(elem)),
-                Some((first, rest)) => match self.elements.get(first)? {
-                    Element::PmlStruct(s) => s.get::<T>(rest),
-                    _ => None
+                None => match self.elements.get(key).map(|elem| T::try_from(elem)) {
+                    None => Err(GetError::DoesNotExits),
+                    Some(res) => res
+                }
+                Some((first, rest)) => match self.elements.get(first) {
+                    Some(Element::PmlStruct(s)) => s.get::<T>(rest),
+                    Some(_) => Err(GetError::InvalidType),
+                    None => Err(GetError::DoesNotExits)
                 }
             }
         }
