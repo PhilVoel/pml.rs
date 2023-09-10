@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 mod impls;
 pub mod parse;
-pub use parse::Error as ParseError;
+pub use parse::{Error as ParseError, NumberError as ParseNumberError};
 
 mod elem {
     use crate::PmlStruct;
