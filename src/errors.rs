@@ -2,7 +2,7 @@
 
 use std::{io::Error as IoError, num::{ParseFloatError, ParseIntError}};
 
-/// Errors that may occur when [parsing](crate::parse) a PML file or [adding](crate::PmlStruct::add) data to a [PmlStruct](crate::PmlStruct).
+/// Errors that may occur when [parsing](crate::parse) a PML file or [adding](crate::PmlStruct::add) data to a [`PmlStruct`](crate::PmlStruct).
 #[derive(Debug)]
 pub enum ParseError {
     /// The provided key was already used for another value.
@@ -63,7 +63,7 @@ pub enum ParseNumberError {
     Float(ParseFloatError)
 }
 
-/// Errors that may occur when [getting data](crate::PmlStruct::get) from a [PmlStruct](crate::PmlStruct).
+/// Errors that may occur when [getting data](crate::PmlStruct::get) from a [`PmlStruct`](crate::PmlStruct).
 #[derive(Debug)]
 pub enum GetError {
     /// The requested element does not exist.

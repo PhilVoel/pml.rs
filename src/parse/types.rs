@@ -138,7 +138,7 @@ impl<'a> ParseData<'a> {
 }
 
 impl WIPStruct {
-    pub fn new() -> Self {
+    pub fn init() -> Self {
         Self {
             finished_elements: HashMap::new(),
             inc_strings: HashMap::new(),

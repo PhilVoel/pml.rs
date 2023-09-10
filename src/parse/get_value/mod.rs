@@ -184,7 +184,7 @@ pub(super) fn bool(parse_data: &mut ParseData, terminator_type: TerminatorType) 
 
 pub(super) fn pml_struct(parse_data: &mut ParseData) -> Result<Rc<RefCell<WIPStruct>>, Error> {
     parse_data.next_char();
-    let temp_struct = Rc::new(RefCell::new(WIPStruct::new()));
+    let temp_struct = Rc::new(RefCell::new(WIPStruct::init()));
     parse_data.add_nested_ref(temp_struct.clone());
 
     while let Some(c) = parse_data.next_non_whitespace_peek() {
