@@ -1,3 +1,4 @@
+//! Functions for parsing stuff to [PmlStructs](crate::PmlStruct).
 use std::{fs, rc::Rc, cell::RefCell};
 use crate::{PmlStruct, errors::ParseError as Error};
 
@@ -6,6 +7,14 @@ mod get_value;
 pub(crate) use types::{ISElem, KeyType, ParseData, WIPElement, WIPStruct};
 use types::TerminatorType;
 
+/// Parses a file to a [PmlStruct](crate::PmlStruct).
+///
+/// Takes the path to a file, parses it, and returns a `PmlStruct` if the file could be parsed
+/// successfully, or an error if one occured.
+///
+/// # Errors
+/// This function returns a [ParseError](crate::errors::ParseError) if the file could not be
+/// opened, or if it contains invalid syntax or data.
 pub fn file(file: &str) -> Result<PmlStruct, Error> {
     let file_content = fs::read_to_string(file)?;
     parse_string(&file_content)

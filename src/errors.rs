@@ -1,4 +1,4 @@
-//! This module contains any errors that may be returned when parsing, inserting or getting data.
+//! Module containing any errors that may be returned when parsing, inserting or getting data.
 
 use std::{io::Error as IoError, num::{ParseFloatError, ParseIntError}};
 

@@ -1,3 +1,8 @@
+//! A library for parsing and working with the PML language.
+//!
+//! PML is a language for storing complex data in a human-readable format.
+//! For more information, see the [PML specification](https://gist.github.com/PhilVoel/00a6acb11257d00a84451f9df4d5b340).
+
 use std::collections::HashMap;
 
 mod impls;
@@ -54,7 +59,16 @@ pub struct PmlStruct {
     elements: HashMap<String, Element>,
 }
 
+/// A container that holds key-value pairs of data.
 impl<'a> PmlStruct {
+    /// Returns the value of the element with the provided key.
+    ///
+    /// Takes a key to the element that should be returned. Returns the element as type `<T>` if the
+    /// conversion could be performed, or an error if one occured.
+    ///
+    /// # Errors
+    /// This function returns an error if the element does not exist, or if the element exists, but
+    /// could not be converted to the requested type.
     pub fn get<T>(&'a self, key: &str) -> Result<T, GetError>
         where
         T: TryFrom<&'a Element, Error = GetError>
@@ -72,6 +86,14 @@ impl<'a> PmlStruct {
             }
         }
 
+    /// Adds an element to the struct.
+    ///
+    /// Takes a key and a value that can be saved in a `PmlStruct`. Should the key point into
+    /// an unexisting struct, the struct will be created.
+    ///
+    /// # Errors
+    /// This function returns an error if the key is invalid, if the element already exists, or if
+    /// the key points into an existing element that is not a struct.
     pub fn add<T>(&mut self, key: String, elem: T) -> Result<(), ParseError>
         where
         T: Into<Element>
