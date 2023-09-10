@@ -1,9 +1,8 @@
 use std::{fs, rc::Rc, cell::RefCell};
-use crate::PmlStruct;
+use crate::{PmlStruct, errors::ParseError as Error};
 
 mod types;
 mod get_value;
-pub use types::{Error, NumberError};
 pub(crate) use types::{ISElem, KeyType, ParseData, WIPElement, WIPStruct};
 use types::TerminatorType;
 

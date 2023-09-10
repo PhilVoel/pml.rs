@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 mod impls;
 pub mod parse;
-pub use parse::{Error as ParseError, NumberError as ParseNumberError};
+pub mod errors;
+pub use errors::{ParseError, ParseNumberError, GetError};
 
 mod elem {
     use crate::PmlStruct;
@@ -51,11 +52,6 @@ use elem::Element;
 #[derive(Clone, Debug)]
 pub struct PmlStruct {
     elements: HashMap<String, Element>,
-}
-
-pub enum GetError {
-    DoesNotExits,
-    InvalidType
 }
 
 impl<'a> PmlStruct {

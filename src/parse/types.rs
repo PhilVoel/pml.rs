@@ -1,37 +1,5 @@
-use std::{io::Error as IoError, rc::Rc, cell::RefCell, num::{ParseFloatError, ParseIntError}, collections::HashMap, iter::Peekable, str::Chars};
-use crate::{PmlStruct, Element};
-
-#[derive(Debug)]
-pub enum NumberError {
-    Int(ParseIntError),
-    Float(ParseFloatError)
-}
-
-#[derive(Debug)]
-pub enum Error {
-    AlreadyExists {
-        key: String,
-    },
-    FileAccess(IoError),
-    InvalidKey,
-    IllegalCharacter{
-        char: char,
-        line: u32,
-        col: u32
-    },
-    IllegalDependency,
-    NotAnExistingStruct(String),
-    ParseNumberError{
-        line: u32,
-        value: String,
-        error: NumberError
-    },
-    UnexpectedEOF,
-    UnknownForcedType{
-        key: String,
-        type_name: String
-    }
-}
+use std::{rc::Rc, cell::RefCell, collections::HashMap, iter::Peekable, str::Chars};
+use crate::{PmlStruct, Element, errors::ParseError as Error};
 
 type IncStringArray = Vec<(usize, Vec<ISElem>)>;
 type IncStructArray = Vec<(usize, Rc<RefCell<WIPStruct>>)>;

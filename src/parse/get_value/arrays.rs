@@ -1,4 +1,4 @@
-use crate::parse::{Error, ParseData, TerminatorType};
+use crate::{ParseError as Error, parse::{ParseData, TerminatorType}};
 use super::{get_number_type_and_string, StdResult, WIPResult};
 
 pub(super) fn strings(parse_data: &mut ParseData) -> WIPResult {
