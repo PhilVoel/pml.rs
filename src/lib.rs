@@ -1,7 +1,8 @@
-use std::{collections::HashMap, io::Error as IoError, num::{ParseFloatError, ParseIntError}};
+use std::collections::HashMap;
 
 mod impls;
 pub mod parse;
+pub use parse::Error as ParseError;
 
 mod elem {
     use crate::PmlStruct;
@@ -52,43 +53,6 @@ pub struct PmlStruct {
     elements: HashMap<String, Element>,
 }
 
-#[derive(Debug)]
-pub enum ParseNumberError {
-    Int(ParseIntError),
-    Float(ParseFloatError)
-}
-
-#[derive(Debug)]
-pub enum Error {
-    AlreadyExists {
-        key: String,
-    },
-    CircularDependency(Vec<String>),
-    FileAccess(IoError),
-    InvalidKey,
-    IllegalCharacter{
-        char: char,
-        line: u32,
-        col: u32
-    },
-    IllegalDependency,
-    NotAnExistingStruct(String),
-    ParseNumberError{
-        line: u32,
-        value: String,
-        error: ParseNumberError
-    },
-    UnexpectedEOF,
-    UnfulfilledDependency{
-        key: String,
-        dependency: String
-    },
-    UnknownForcedType{
-        key: String,
-        type_name: String
-    }
-}
-
 pub enum GetError {
     DoesNotExits,
     InvalidType
@@ -112,23 +76,23 @@ impl<'a> PmlStruct {
             }
         }
 
-    pub fn add<T>(&mut self, key: String, elem: T) -> Result<(), Error>
+    pub fn add<T>(&mut self, key: String, elem: T) -> Result<(), ParseError>
         where
         T: Into<Element>
         {
             if key.starts_with('.') || key.ends_with('.') || key.is_empty() {
-                return Err(Error::InvalidKey);
+                return Err(ParseError::InvalidKey);
             }
             match key.split_once('.') {
                 None => {
                     match self.elements.insert(key.clone(), elem.into()) {
-                        Some(_) => Err(Error::AlreadyExists{key}),
+                        Some(_) => Err(ParseError::AlreadyExists{key}),
                         None => Ok(())
                     }
                 }
                 Some((first, rest)) => match self.elements.get_mut(first) {
                     Some(Element::PmlStruct(s)) => s.add(String::from(rest), elem),
-                    _ => Err(Error::NotAnExistingStruct(String::from(first)))
+                    _ => Err(ParseError::NotAnExistingStruct(String::from(first)))
                 }
             }
         }

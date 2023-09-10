@@ -1,7 +1,7 @@
 mod arrays;
 
 use std::{cell::RefCell, rc::Rc};
-use crate::{Error, elem::Element, ParseNumberError};
+use crate::{elem::Element, parse::{Error, NumberError}};
 use super::{ParseData, KeyType, illegal_char_err, is_char_reserved, WIPElement, TerminatorType, ISElem, WIPStruct};
 
 type StdResult = Result<Element, Error>;
@@ -338,7 +338,7 @@ pub(super) fn forced(parse_data: &mut ParseData, terminator_type: TerminatorType
     Err(Error::UnexpectedEOF)
 }
 
-fn parse_forced(value: &str, force_type: ForceCategory) -> Result<Element, ParseNumberError> {
+fn parse_forced(value: &str, force_type: ForceCategory) -> Result<Element, NumberError> {
     Ok(match force_type {
         F32 => value.parse::<f32>()?.into(),
         F64 => value.parse::<f64>()?.into(),
