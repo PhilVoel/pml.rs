@@ -88,7 +88,13 @@ impl<'a> PmlStruct {
                 }
                 Some((first, rest)) => match self.elements.get_mut(first) {
                     Some(Element::PmlStruct(s)) => s.add(String::from(rest), elem),
-                    _ => Err(ParseError::NotAnExistingStruct(String::from(first)))
+                    Some(_) => Err(ParseError::NotAStruct(String::from(first))),
+                    None => {
+                        let mut s = PmlStruct{elements: HashMap::new()};
+                        s.add(String::from(rest), elem)?;
+                        self.elements.insert(String::from(first), Element::PmlStruct(Box::new(s)));
+                        Ok(())
+                    }
                 }
             }
         }

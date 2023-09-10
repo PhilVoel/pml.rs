@@ -13,7 +13,7 @@ pub enum ParseError {
         col: u32
     },
     IllegalDependency,
-    NotAnExistingStruct(String),
+    NotAStruct(String),
     ParseNumberError{
         line: u32,
         value: String,
