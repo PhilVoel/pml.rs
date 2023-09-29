@@ -17,10 +17,10 @@ use types::TerminatorType;
 /// opened, or if it contains invalid syntax or data.
 pub fn file(file: &str) -> Result<PmlStruct, Error> {
     let file_content = fs::read_to_string(file)?;
-    parse_string(&file_content)
+    parse_pml_string(&file_content)
 }
 
-fn parse_string(input: &str) -> Result<PmlStruct, Error> {
+fn parse_pml_string(input: &str) -> Result<PmlStruct, Error> {
     let mut parse_data = ParseData::init(input);
     let temp_struct = Rc::new(RefCell::new(WIPStruct::init()));
     parse_data.add_nested_ref(temp_struct.clone());
@@ -74,17 +74,10 @@ fn get_key_value_pair(parse_data: &mut ParseData) -> Result<(String, WIPElement)
             res
         }
         Some('t' | 'f') => get_value::bool(parse_data, TerminatorType::Struct)?.into(),
-        Some('<') => get_value::forced(parse_data, TerminatorType::Struct, &key)?.into(),
+        Some('<') => get_value::forced(parse_data, TerminatorType::Struct, &key)?,
         Some('{') => {
             parse_data.add_nested_name(key.clone());
             let res = get_value::pml_struct(parse_data)?.into();
-            parse_data.drop_last_nested_name();
-            parse_data.drop_last_nested_ref();
-            res
-        }
-        Some('[') => {
-            parse_data.add_nested_name(key.clone());
-            let res = get_value::array(parse_data)?;
             parse_data.drop_last_nested_name();
             res
         }

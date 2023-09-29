@@ -22,7 +22,7 @@ enum NumType {
     Decimal
 }
 
-#[derive(Clone, Copy)]
+#[derive(PartialEq, Clone, Copy)]
 enum ForceCategory {
     I8,
     I16,
@@ -35,9 +35,12 @@ enum ForceCategory {
     U64,
     U128,
     F32,
-    F64
+    F64,
+    Bool,
+    Struct,
+    FString,
 }
-use ForceCategory::{I8, I16, I32, I64, I128, U8, U16, U32, U64, U128, F32, F64};
+use ForceCategory::{I8, I16, I32, I64, I128, U8, U16, U32, U64, U128, F32, F64, Bool, Struct, FString};
 
 pub(super) fn string(parse_data: &mut ParseData, terminator_type: TerminatorType) -> Result<Vec<ISElem>, Error> {
     let terminators = match terminator_type {
@@ -163,7 +166,12 @@ pub(super) fn bool(parse_data: &mut ParseData, terminator_type: TerminatorType) 
         TerminatorType::Struct => vec![';'],
         TerminatorType::Array => vec![',', ']']
     };
-    let mut value = String::from(parse_data.next_char().expect("There should always be a current struct."));
+    let next_c = match parse_data.next_char(){
+        Some(c@ ('t' | 'f')) => c,
+        Some(c) => return Err(illegal_char_err(c, parse_data)),
+        None => return Err(Error::UnexpectedEOF)
+    };
+    let mut value = String::from(next_c);
     while let Some(c) = parse_data.next_char() {
         match (value.as_str(), c) {
             #[allow(clippy::unnested_or_patterns)]
@@ -190,6 +198,7 @@ pub(super) fn pml_struct(parse_data: &mut ParseData) -> Result<Rc<RefCell<WIPStr
     while let Some(c) = parse_data.next_non_whitespace_peek() {
         if c == '}' {
             parse_data.next_char();
+            parse_data.drop_last_nested_ref();
             return Ok(temp_struct);
         }
         let (key, value) = super::get_key_value_pair(parse_data)?;
@@ -294,7 +303,7 @@ fn get_number_type_and_string(parse_data: &mut ParseData, terminator_type: Termi
     Err(Error::UnexpectedEOF)
 }
 
-pub(super) fn forced(parse_data: &mut ParseData, terminator_type: TerminatorType, key: &str) -> StdResult {
+pub(super) fn forced(parse_data: &mut ParseData, terminator_type: TerminatorType, key: &str) -> WIPResult {
     parse_data.next_char();
     let mut ftype_string = String::new();
     while let Some(c) = parse_data.next_char() {
@@ -313,17 +322,49 @@ pub(super) fn forced(parse_data: &mut ParseData, terminator_type: TerminatorType
                     "u128" => U128,
                     "f32" => F32,
                     "f64" => F64,
+                    "b" => Bool,
+                    "struct" => Struct,
+                    "str" => FString,
                     t => return Err(Error::UnknownForcedType {
                         key: parse_data.get_full_struct_path() + "." + key,
                         type_name: t.to_string()
                     })
                 };
                 if parse_data.next_non_whitespace_peek() == Some('[') {
-                    return get_forced_array(parse_data, force_type);
+                    parse_data.next_char();
+                    parse_data.add_nested_name(key.to_string());
+                    let res = match force_type {
+                        I8 => arrays::i8(parse_data)?,
+                        I16 => arrays::i16(parse_data)?,
+                        I32 => arrays::i32(parse_data)?,
+                        I64 => arrays::i64(parse_data)?,
+                        I128 => arrays::i128(parse_data)?,
+                        U8 => arrays::u8(parse_data)?,
+                        U16 => arrays::u16(parse_data)?,
+                        U32 => arrays::u32(parse_data)?,
+                        U64 => arrays::u64(parse_data)?,
+                        U128 => arrays::u128(parse_data)?,
+                        F32 => arrays::f32(parse_data)?,
+                        F64 => arrays::f64(parse_data)?,
+                        Bool => arrays::bool(parse_data)?,
+                        Struct => arrays::structs(parse_data)?,
+                        FString => arrays::strings(parse_data)?,
+                    };
+                    parse_data.drop_last_nested_name();
+                    return Ok(res);
+                }
+                if force_type == Bool {
+                    return Ok(bool(parse_data, TerminatorType::Struct)?.into());
+                }
+                if force_type == FString {
+                    return Ok(string(parse_data, TerminatorType::Struct)?.into());
+                }
+                if force_type == Struct {
+                    return Ok(pml_struct(parse_data)?.into());
                 }
                 let (_, value) = get_number_type_and_string(parse_data, terminator_type)?;
-                return match parse_forced(&value, force_type) {
-                    Ok(element) => Ok(element),
+                return match parse_forced_number(&value, force_type) {
+                    Ok(element) => Ok(element.into()),
                     Err(error) => Err(Error::ParseNumberError {
                         error,
                         value,
@@ -338,7 +379,7 @@ pub(super) fn forced(parse_data: &mut ParseData, terminator_type: TerminatorType
     Err(Error::UnexpectedEOF)
 }
 
-fn parse_forced(value: &str, force_type: ForceCategory) -> Result<Element, ParseNumberError> {
+fn parse_forced_number(value: &str, force_type: ForceCategory) -> Result<Element, ParseNumberError> {
     Ok(match force_type {
         F32 => value.parse::<f32>()?.into(),
         F64 => value.parse::<f64>()?.into(),
@@ -352,35 +393,7 @@ fn parse_forced(value: &str, force_type: ForceCategory) -> Result<Element, Parse
         U32 => value.parse::<u32>()?.into(),
         U64 => value.parse::<u64>()?.into(),
         U128 => value.parse::<u128>()?.into(),
+        Bool|Struct|FString => unreachable!("This should have been caught before the function call.")
     })
 }
 
-fn get_forced_array(parse_data: &mut ParseData, force_type: ForceCategory) -> StdResult {
-    parse_data.next_char();
-    parse_data.next_non_whitespace_peek();
-    match force_type {
-        F32 => arrays::f32(parse_data),
-        F64 => arrays::f64(parse_data),
-        I8 => arrays::i8(parse_data),        
-        I16 => arrays::i16(parse_data),        
-        I32 => arrays::i32(parse_data),        
-        I64 => arrays::i64(parse_data),        
-        I128 => arrays::i128(parse_data),        
-        U8 => arrays::u8(parse_data),        
-        U16 => arrays::u16(parse_data),        
-        U32 => arrays::u32(parse_data),        
-        U64 => arrays::u64(parse_data),        
-        U128 => arrays::u128(parse_data),        
-    }
-}
-
-pub(super) fn array(parse_data: &mut ParseData) -> WIPResult {
-    parse_data.next_char();
-    match parse_data.next_non_whitespace_peek() {
-        Some('|' | '"') => arrays::strings(parse_data),
-        Some('{') => arrays::structs(parse_data),
-        Some('t' | 'f') => Ok(arrays::bool(parse_data)?.into()),
-        Some(c) => Err(illegal_char_err(c, parse_data)),
-        None => Err(Error::UnexpectedEOF)
-    }
-}

@@ -14,8 +14,8 @@ macro_rules! add_primitive {
                     Element::$pml_elem(e) => Ok(*e),
                     $(
                         Element::$casts(e) => Ok(*e as $type),
-                        )*
-                        _ => Err(Self::Error::InvalidType)
+                    )*
+                    _ => Err(Self::Error::InvalidType)
                 }
             }
         }

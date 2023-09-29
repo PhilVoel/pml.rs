@@ -1,4 +1,4 @@
-use crate::{Element, PmlStruct, parse::WIPStruct, elem::ArrayElement};
+use crate::{Element, PmlStruct, parse::WIPStruct, elem::ArrayElement, GetError};
 use std::collections::HashMap;
 
 impl From<HashMap<String, Element>> for Element {
@@ -15,11 +15,12 @@ impl From<WIPStruct> for PmlStruct {
     }
 }
 
-impl From<&Element> for Vec<PmlStruct> {
-    fn from(value: &Element) -> Self {
+impl TryFrom<&Element> for Vec<PmlStruct> {
+    type Error = GetError;
+    fn try_from(value: &Element) -> Result<Self, Self::Error> {
         match value {
-            Element::PmlArray(ArrayElement::PmlStruct(arr)) => arr.clone(),
-            _ => panic!("Invalid type")
+            Element::PmlArray(ArrayElement::PmlStruct(e)) => Ok(e.clone()),
+            _ => Err(GetError::InvalidType)
         }
     }
 }

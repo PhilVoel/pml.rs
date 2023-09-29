@@ -1,5 +1,5 @@
 use crate::{ParseError as Error, parse::{ParseData, TerminatorType}};
-use super::{get_number_type_and_string, StdResult, WIPResult};
+use super::{get_number_type_and_string, WIPResult};
 
 pub(super) fn strings(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
@@ -38,7 +38,7 @@ pub(super) fn structs(parse_data: &mut ParseData) -> WIPResult {
     Ok(array.into())
 }
 
-pub(super) fn bool(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn bool(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -54,7 +54,7 @@ pub(super) fn bool(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn f32(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn f32(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -78,7 +78,7 @@ pub(super) fn f32(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn f64(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn f64(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -102,7 +102,7 @@ pub(super) fn f64(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn i8(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn i8(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -126,7 +126,7 @@ pub(super) fn i8(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn i16(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn i16(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -150,7 +150,7 @@ pub(super) fn i16(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn i32(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn i32(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -175,7 +175,7 @@ pub(super) fn i32(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn i64(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn i64(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -199,7 +199,7 @@ pub(super) fn i64(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn i128(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn i128(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -223,7 +223,7 @@ pub(super) fn i128(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn u8(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn u8(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -247,7 +247,7 @@ pub(super) fn u8(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn u16(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn u16(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -271,7 +271,7 @@ pub(super) fn u16(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn u32(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn u32(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -295,7 +295,7 @@ pub(super) fn u32(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn u64(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn u64(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -319,7 +319,7 @@ pub(super) fn u64(parse_data: &mut ParseData) -> StdResult {
     Ok(array.into())
 }
 
-pub(super) fn u128(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn u128(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {

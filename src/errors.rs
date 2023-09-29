@@ -49,7 +49,7 @@ pub enum ParseError {
         key: String,
         /// The typename that was provided.
         type_name: String
-    }
+    },
 }
 
 /// Errors that may occur when parsing a number. This can occur because the provided number could
