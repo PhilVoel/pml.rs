@@ -31,7 +31,7 @@ pub(super) fn structs(parse_data: &mut ParseData) -> WIPResult {
             }
             Some(_) => ()
         }
-        array.push((count, super::pml_struct(parse_data)?));
+        array.push((count, super::pml_struct(parse_data, TerminatorType::Array)?));
         parse_data.drop_last_nested_ref();
         count += 1;
     }

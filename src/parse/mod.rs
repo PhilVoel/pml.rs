@@ -77,7 +77,7 @@ fn get_key_value_pair(parse_data: &mut ParseData) -> Result<(String, WIPElement)
         Some('<') => get_value::forced(parse_data, TerminatorType::Struct, &key)?,
         Some('{') => {
             parse_data.add_nested_name(key.clone());
-            let res = get_value::pml_struct(parse_data)?.into();
+            let res = get_value::pml_struct(parse_data, TerminatorType::Struct)?.into();
             parse_data.drop_last_nested_name();
             res
         }

@@ -190,7 +190,11 @@ pub(super) fn bool(parse_data: &mut ParseData, terminator_type: TerminatorType) 
     Err(Error::UnexpectedEOF)
 }
 
-pub(super) fn pml_struct(parse_data: &mut ParseData) -> Result<Rc<RefCell<WIPStruct>>, Error> {
+pub(super) fn pml_struct(parse_data: &mut ParseData, terminator_type: TerminatorType) -> Result<Rc<RefCell<WIPStruct>>, Error> {
+    let terminators = match terminator_type {
+        TerminatorType::Struct => vec![';'],
+        TerminatorType::Array => vec![',', ']']
+    };
     parse_data.next_char();
     let temp_struct = Rc::new(RefCell::new(WIPStruct::init()));
     parse_data.add_nested_ref(temp_struct.clone());
@@ -199,7 +203,11 @@ pub(super) fn pml_struct(parse_data: &mut ParseData) -> Result<Rc<RefCell<WIPStr
         if c == '}' {
             parse_data.next_char();
             parse_data.drop_last_nested_ref();
-            return Ok(temp_struct);
+            match parse_data.next_non_whitespace() {
+                Some(c) if terminators.contains(&c) => return Ok(temp_struct),
+                Some(c) => return Err(illegal_char_err(c, parse_data)),
+                None => return Err(Error::UnexpectedEOF)
+            }
         }
         let (key, value) = super::get_key_value_pair(parse_data)?;
         temp_struct.borrow_mut().add(key, value)?;
@@ -351,7 +359,11 @@ pub(super) fn forced(parse_data: &mut ParseData, terminator_type: TerminatorType
                         FString => arrays::strings(parse_data)?,
                     };
                     parse_data.drop_last_nested_name();
-                    return Ok(res);
+                    match parse_data.next_non_whitespace() {
+                        Some(';') => return Ok(res),
+                        Some(c) => return Err(illegal_char_err(c, parse_data)),
+                        None => return Err(Error::UnexpectedEOF)
+                    }
                 }
                 if force_type == Bool {
                     return Ok(bool(parse_data, TerminatorType::Struct)?.into());
@@ -360,7 +372,7 @@ pub(super) fn forced(parse_data: &mut ParseData, terminator_type: TerminatorType
                     return Ok(string(parse_data, TerminatorType::Struct)?.into());
                 }
                 if force_type == Struct {
-                    return Ok(pml_struct(parse_data)?.into());
+                    return Ok(pml_struct(parse_data, TerminatorType::Struct)?.into());
                 }
                 let (_, value) = get_number_type_and_string(parse_data, terminator_type)?;
                 return match parse_forced_number(&value, force_type) {
