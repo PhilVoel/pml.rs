@@ -15,6 +15,7 @@ pub(super) fn strings(parse_data: &mut ParseData) -> WIPResult {
         }
         array.push((count, super::string(parse_data, TerminatorType::Array)?));
         count += 1;
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -34,6 +35,7 @@ pub(super) fn structs(parse_data: &mut ParseData) -> WIPResult {
         array.push((count, super::pml_struct(parse_data, TerminatorType::Array)?));
         parse_data.drop_last_nested_ref();
         count += 1;
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -50,6 +52,7 @@ pub(super) fn bool(parse_data: &mut ParseData) -> WIPResult {
             Some(_) => ()
         }
         array.push(super::bool(parse_data, TerminatorType::Array)?);
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -74,6 +77,7 @@ pub(super) fn f32(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -98,6 +102,7 @@ pub(super) fn f64(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -122,6 +127,7 @@ pub(super) fn i8(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -146,6 +152,7 @@ pub(super) fn i16(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -171,6 +178,7 @@ pub(super) fn i32(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -195,6 +203,7 @@ pub(super) fn i64(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -219,6 +228,7 @@ pub(super) fn i128(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -243,6 +253,7 @@ pub(super) fn u8(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -267,6 +278,7 @@ pub(super) fn u16(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -291,6 +303,7 @@ pub(super) fn u32(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -315,6 +328,7 @@ pub(super) fn u64(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
@@ -339,6 +353,7 @@ pub(super) fn u128(parse_data: &mut ParseData) -> WIPResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }

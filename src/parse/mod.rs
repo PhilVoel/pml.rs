@@ -4,7 +4,7 @@ use crate::{PmlStruct, errors::ParseError as Error};
 
 mod types;
 mod get_value;
-pub(crate) use types::{ISElem, KeyType, ParseData, WIPElement, WIPStruct};
+pub(crate) use types::{ISElem, KeyType, ParseData, WIPElement, WIPStruct, MetaInfo};
 use types::TerminatorType;
 
 /// Parses a file to a [`PmlStruct`](crate::PmlStruct).
@@ -24,10 +24,12 @@ fn parse_pml_string(input: &str) -> Result<PmlStruct, Error> {
     let mut parse_data = ParseData::init(input);
     let temp_struct = Rc::new(RefCell::new(WIPStruct::init()));
     parse_data.add_nested_ref(temp_struct.clone());
-
+    
+    get_meta_info(&mut parse_data)?;
     while parse_data.has_next_non_whitespace() {
         let (key, value) = get_key_value_pair(&mut parse_data)?;
         temp_struct.borrow_mut().add(key, value)?;
+        parse_data.try_skip_comment();
     }
     loop {
         let (no_change, done) = temp_struct.borrow_mut().resolve_inc_strings();
@@ -66,6 +68,7 @@ fn get_key_value_pair(parse_data: &mut ParseData) -> Result<(String, WIPElement)
         Some(_) => get_unquoted_key(parse_data),
         None => unreachable!(),
     }?;
+    parse_data.try_skip_comment();
     let value = match parse_data.next_non_whitespace_peek() {
         Some('|'|'"') => {
             parse_data.add_nested_name(key.clone());
@@ -100,6 +103,14 @@ fn get_quoted_key(parse_data: &mut ParseData) -> Result<String, Error> {
                 }
                 return match parse_data.next_non_whitespace() {
                     Some('=') => Ok(key),
+                    Some('#') => {
+                        parse_data.skip_comment();
+                        match parse_data.next_non_whitespace() {
+                            Some('=') => Ok(key),
+                            Some(c) => Err(illegal_char_err(c, parse_data)),
+                            None => Err(Error::UnexpectedEOF)
+                        }
+                    }
                     Some(c) => Err(illegal_char_err(c, parse_data)),
                     None => Err(Error::UnexpectedEOF)
                 }
@@ -121,6 +132,14 @@ fn get_unquoted_key(parse_data: &mut ParseData) -> Result<String, Error> {
                 }
                 return Ok(key)
             }
+            '#' => {
+                parse_data.skip_comment();
+                match parse_data.next_non_whitespace() {
+                    Some('=') => return Ok(key),
+                    Some(c) => return Err(illegal_char_err(c, parse_data)),
+                    None => return Err(Error::UnexpectedEOF)
+                }
+            }
             c if c.is_whitespace() => {
                 return match parse_data.next_non_whitespace() {
                     Some('=') => Ok(key),
@@ -133,4 +152,45 @@ fn get_unquoted_key(parse_data: &mut ParseData) -> Result<String, Error> {
         }
     }
     Err(Error::UnexpectedEOF)
+}
+
+fn get_meta_info(parse_data: &mut ParseData) -> Result<MetaInfo, Error> {
+    let mut meta_info = MetaInfo::init();
+    if parse_data.next_non_whitespace_peek() == Some('#') {
+        let ident = get_meta_ident(parse_data)?;
+        if ident == "version" {
+            meta_info.parse_version(parse_data)?;
+        }
+        else {
+            handle_meta_info(parse_data, &ident, &mut meta_info)?;
+        }
+    }
+    while let Some('#') = parse_data.next_non_whitespace_peek() {
+        let ident = get_meta_ident(parse_data)?;
+        handle_meta_info(parse_data, &ident, &mut meta_info)?;
+    }
+    Ok(meta_info)
+}
+
+fn get_meta_ident(parse_data: &mut ParseData) -> Result<String, Error> {
+    parse_data.next_char();
+    let mut ident = String::new();
+    loop {
+        match parse_data.next_char() {
+            Some(c) if c.is_whitespace() => break,
+            Some(c) => ident.push(c),
+            None => return Err(Error::UnexpectedEOF)
+        }
+    }
+    Ok(ident)
+}
+
+fn handle_meta_info(parse_data: &mut ParseData, ident: &str, meta_info: &mut MetaInfo) -> Result<(), Error> {
+    match ident {
+        "def" => meta_info.add_struct_template(parse_data),
+        _ => {
+            parse_data.skip_comment();
+            Ok(())
+        }
+    }
 }

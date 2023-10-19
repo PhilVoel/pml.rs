@@ -22,6 +22,56 @@ pub(crate) struct ParseData<'a> {
     pub last_char: char,
 }
 
+pub(crate) struct MetaInfo {
+    version: Version,
+    struct_templates: HashMap<String, StructTemplate>,
+}
+
+pub(crate) struct Version {
+    pub major: u8,
+    pub minor: u8,
+}
+
+pub(crate) struct StructTemplate {
+}
+
+pub(crate) enum ArgumentTypes {
+    Bool,
+    PmlString,
+    Struct,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    F32,
+    F64,
+    Array(ArrayTypes, usize),
+}
+
+pub(crate) enum ArrayTypes {
+    Bool,
+    PmlString,
+    Struct,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    F32,
+    F64,
+}
+
 #[derive(Debug)]
 pub(crate) struct WIPStruct {
     pub(crate) finished_elements: HashMap<String, Element>,
@@ -103,6 +153,20 @@ impl<'a> ParseData<'a> {
         None
     }
 
+    pub fn skip_comment(&mut self) {
+        while let Some(c) = self.next_char() {
+            if c == '\n' {
+                self.try_skip_comment();
+            }
+        }
+    }
+
+    pub fn try_skip_comment(&mut self) {
+        if let Some('#') = self.next_non_whitespace_peek() {
+            self.skip_comment();
+        }
+    }
+
     pub fn num_of_nested(&self) -> usize {
         self.nested_names.len()
     }
@@ -135,6 +199,37 @@ impl<'a> ParseData<'a> {
         self.nested_refs.pop();
     }
 
+}
+
+impl MetaInfo {
+    pub fn init() -> Self {
+        Self {
+            version: Version {
+                major: 1,
+                minor: 0,
+            },
+            struct_templates: HashMap::new(),
+        }
+    }
+
+    pub fn parse_version(&mut self, parse_data: &mut ParseData) -> Result<(), Error> {
+        let mut text = String::new();
+        loop {
+            match parse_data.next_char() {
+                Some(c) if c.is_whitespace() => break,
+                Some(c) => text.push(c),
+                None => return Err(Error::UnexpectedEOF)
+            }
+        }
+        let (major, minor) = text.split_once('.').ok_or(Error::InvalidVersion)?;
+        self.version.major = major.parse().map_err(|_| Error::InvalidVersion)?;
+        self.version.minor = minor.parse().map_err(|_| Error::InvalidVersion)?;
+        Ok(())
+    }
+
+    pub fn add_struct_template(&mut self, parse_data: &mut ParseData) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 impl WIPStruct {

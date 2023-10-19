@@ -52,6 +52,7 @@ pub(super) fn string(parse_data: &mut ParseData, terminator_type: TerminatorType
         match c {
             '"' => string_insert_literal(parse_data, &mut string_elements)?,
             '|' => string_insert_variable(parse_data, &mut string_elements)?,
+            '#' => parse_data.skip_comment(),
             c if terminators.contains(&c) => return Ok(string_elements),
             c => return Err(illegal_char_err(c, parse_data))
         }
@@ -88,6 +89,7 @@ fn string_insert_variable(parse_data: &mut ParseData, string_elements: &mut Vec<
     let mut state;
     let mut value = String::new();
     let mut link = parse_data.nested_refs.first().expect("There should always be a struct.").clone();
+    parse_data.try_skip_comment();
     match parse_data.next_non_whitespace() {
         Some('|') => return Ok(()),
         Some('"') => state = VPS::Start(KeyType::Quotes, 0),
@@ -103,6 +105,11 @@ fn string_insert_variable(parse_data: &mut ParseData, string_elements: &mut Vec<
         match (state, c) {
             (VPS::Start(KeyType::Quotes, n), c @ '"') |
             (VPS::Start(KeyType::NoQuotes, n), c) if c.is_whitespace() => {
+                string_elements.push(ISElem::Literal(parse_data.get_nested_key(n)));
+                state = VPS::BeforeComma;
+            }
+            (VPS::Start(KeyType::NoQuotes, n), '#') => {
+                parse_data.skip_comment();
                 string_elements.push(ISElem::Literal(parse_data.get_nested_key(n)));
                 state = VPS::BeforeComma;
             }
@@ -137,6 +144,12 @@ fn string_insert_variable(parse_data: &mut ParseData, string_elements: &mut Vec<
                 state = VPS::AfterComma;
                 value = String::new();
             }
+            (VPS::Variable(KeyType::NoQuotes), '#') => {
+                parse_data.skip_comment();
+                state = VPS::BeforeComma;
+                string_elements.push(ISElem::Variable(link.clone(), value));
+                value = String::new();
+            }
             (VPS::Variable(KeyType::NoQuotes), c) if c.is_whitespace() => {
                 state = VPS::BeforeComma;
                 string_elements.push(ISElem::Variable(link.clone(), value));
@@ -145,6 +158,7 @@ fn string_insert_variable(parse_data: &mut ParseData, string_elements: &mut Vec<
             (VPS::Variable(_), '.') => value.push('.'),
             (VPS::Variable(_), c) if is_char_reserved(c) => return Err(illegal_char_err(c, parse_data)),
             (VPS::Variable(_), c) => value.push(c),
+            (VPS::BeforeComma | VPS::AfterComma, '#') => parse_data.skip_comment(),
             (VPS::BeforeComma | VPS::AfterComma, c) if c.is_whitespace() => (),
             (VPS::BeforeComma, ',') => state = VPS::AfterComma,
             (VPS::BeforeComma | VPS::AfterComma, '|') => return Ok(()),
@@ -182,6 +196,7 @@ pub(super) fn bool(parse_data: &mut ParseData, terminator_type: TerminatorType) 
             ("fa", 'l') |
             ("fal", 's') |
             ("fals", 'e') => value.push(c),
+            ("true"|"false", '#') => parse_data.skip_comment(),
             ("true"|"false", c) if c.is_whitespace() => (),
             ("true"|"false", c) if terminators.contains(&c) => return Ok(value.as_str() == "true"),
             (_, c) => return Err(illegal_char_err(c, parse_data))
@@ -203,6 +218,7 @@ pub(super) fn pml_struct(parse_data: &mut ParseData, terminator_type: Terminator
         if c == '}' {
             parse_data.next_char();
             parse_data.drop_last_nested_ref();
+            parse_data.try_skip_comment();
             match parse_data.next_non_whitespace() {
                 Some(c) if terminators.contains(&c) => return Ok(temp_struct),
                 Some(c) => return Err(illegal_char_err(c, parse_data)),
@@ -211,6 +227,7 @@ pub(super) fn pml_struct(parse_data: &mut ParseData, terminator_type: Terminator
         }
         let (key, value) = super::get_key_value_pair(parse_data)?;
         temp_struct.borrow_mut().add(key, value)?;
+        parse_data.try_skip_comment();
     }
     Err(Error::UnexpectedEOF)
 }
@@ -298,6 +315,14 @@ fn get_number_type_and_string(parse_data: &mut ParseData, terminator_type: Termi
                 num_type = NumType::Decimal;
                 value.push('.');
             }
+            '#' => {
+                parse_data.skip_comment();
+                return match parse_data.next_non_whitespace() {
+                    Some(c) if terminators.contains(&c) => Ok((num_type, value)),
+                    Some(c) => Err(illegal_char_err(c, parse_data)),
+                    None => Err(Error::UnexpectedEOF)
+                }
+            }
             c if c.is_ascii_digit() => value.push(c),
             c if c.is_whitespace() => return match parse_data.next_non_whitespace() {
                 Some(c) if terminators.contains(&c) => Ok((num_type, value)),
@@ -317,6 +342,7 @@ pub(super) fn forced(parse_data: &mut ParseData, terminator_type: TerminatorType
     while let Some(c) = parse_data.next_char() {
         match c {
             '>' => {
+                parse_data.try_skip_comment();
                 let force_type = match ftype_string.trim() {
                     "i8" => I8,
                     "i16" => I16,

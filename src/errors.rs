@@ -17,6 +17,8 @@ pub enum ParseError {
     ),
     /// The key is not valid.
     InvalidKey,
+    /// The provided PML version is not valid.
+    InvalidVersion,
     /// The character is not allowed at that position.
     IllegalCharacter{
         /// The character that is not allowed.
