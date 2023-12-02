@@ -1,5 +1,5 @@
-use crate::{Element, PmlStruct, parse::WIPStruct};
-use std::{collections::HashMap, fmt::{Formatter, Result, Display}};
+use crate::{Element, PmlStruct, parse::WIPStruct, elem::ArrayElement, GetError};
+use std::collections::HashMap;
 
 impl From<HashMap<String, Element>> for Element {
     fn from(elements: HashMap<String, Element>) -> Self {
@@ -15,19 +15,12 @@ impl From<WIPStruct> for PmlStruct {
     }
 }
 
-impl<'a> From<&'a Element> for &'a Box<PmlStruct> {
-    fn from(e: &'a Element) -> Self {
-        if let Element::PmlStruct(s) = e {
-            s
+impl TryFrom<&Element> for Vec<PmlStruct> {
+    type Error = GetError;
+    fn try_from(value: &Element) -> Result<Self, Self::Error> {
+        match value {
+            Element::PmlArray(ArrayElement::PmlStruct(e)) => Ok(e.clone()),
+            _ => Err(GetError::InvalidType)
         }
-        else {
-            panic!("Not a struct");
-        }
-    }
-}
-
-impl Display for PmlStruct {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{:#?}", self.elements)
     }
 }

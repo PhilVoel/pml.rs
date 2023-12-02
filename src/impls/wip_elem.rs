@@ -14,8 +14,8 @@ impl From<Vec<ISElem>> for WIPElement {
     }
 }
 
-impl From<Vec<Vec<ISElem>>> for WIPElement {
-    fn from(value: Vec<Vec<ISElem>>) -> Self {
+impl From<Vec<(usize, Vec<ISElem>)>> for WIPElement {
+    fn from(value: Vec<(usize, Vec<ISElem>)>) -> Self {
         Self::StringArray(value)
     }
 }
@@ -26,8 +26,8 @@ impl From<Rc<RefCell<WIPStruct>>> for WIPElement {
     }
 }
 
-impl From<Vec<Rc<RefCell<WIPStruct>>>> for WIPElement {
-    fn from(value: Vec<Rc<RefCell<WIPStruct>>>) -> Self {
+impl From<Vec<(usize, Rc<RefCell<WIPStruct>>)>> for WIPElement {
+    fn from(value: Vec<(usize, Rc<RefCell<WIPStruct>>)>) -> Self {
         Self::StructArray(value)
     }
 }

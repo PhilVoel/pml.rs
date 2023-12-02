@@ -15,7 +15,7 @@ fn main() {
 	match pml_result {
 		Err(e) => println("{e:#?}"),
 		Ok(result) => {
-			if(result.get::<bool>("stayAnonymous").is_some()) {
+			if(result.get::<bool>("stayAnonymous").is_ok()) {
 				println!("I won't tell you anything about me.");
 			}
 			else {
@@ -34,20 +34,20 @@ first_name = "Max";
 "name and age" = |first_name, last_name| " "|age|;
 last_name = "Mustermann";
 stayAnonymous = true;
-friends = [
+friends =<struct> [
     {
         name= "Person";
         past_ages= <u8> [
             0,1,2,
             3 , 4,5
-        ]
-    }
+        ];
+    },
     {
         name= |..first_name|;
         past_ages = <u8> [
             0,1,2,3,4,
-        ]
+        ];
     }
-]
+];
 
 ```

@@ -1,8 +1,9 @@
-use crate::{Error, parse::{ParseData, TerminatorType}};
-use super::{get_number_type_and_string, StdResult, WIPResult};
+use crate::{ParseError as Error, parse::{ParseData, TerminatorType}};
+use super::{get_number_type_and_string, WIPResult};
 
 pub(super) fn strings(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
+    let mut count = 0;
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
             None => return Err(Error::UnexpectedEOF),
@@ -12,13 +13,16 @@ pub(super) fn strings(parse_data: &mut ParseData) -> WIPResult {
             }
             Some(_) => ()
         }
-        array.push(super::string(parse_data, TerminatorType::Array)?);
+        array.push((count, super::string(parse_data, TerminatorType::Array)?));
+        count += 1;
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
 pub(super) fn structs(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
+    let mut count = 0;
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
             None => return Err(Error::UnexpectedEOF),
@@ -28,13 +32,32 @@ pub(super) fn structs(parse_data: &mut ParseData) -> WIPResult {
             }
             Some(_) => ()
         }
-        array.push(super::pml_struct(parse_data)?);
+        array.push((count, super::pml_struct(parse_data, TerminatorType::Array)?));
         parse_data.drop_last_nested_ref();
+        count += 1;
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn f32(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn bool(parse_data: &mut ParseData) -> WIPResult {
+    let mut array = Vec::new();
+    while parse_data.last_char != ']' {
+        match parse_data.next_non_whitespace_peek() {
+            None => return Err(Error::UnexpectedEOF),
+            Some(']') => {
+                parse_data.next_char();
+                break;
+            }
+            Some(_) => ()
+        }
+        array.push(super::bool(parse_data, TerminatorType::Array)?);
+        parse_data.try_skip_comment();
+    }
+    Ok(array.into())
+}
+
+pub(super) fn f32(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -54,11 +77,12 @@ pub(super) fn f32(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn f64(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn f64(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -78,11 +102,12 @@ pub(super) fn f64(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn s8(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn i8(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -102,11 +127,12 @@ pub(super) fn s8(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn s16(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn i16(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -126,11 +152,12 @@ pub(super) fn s16(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn s32(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn i32(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -151,11 +178,12 @@ pub(super) fn s32(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn s64(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn i64(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -175,11 +203,12 @@ pub(super) fn s64(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn s128(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn i128(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -199,11 +228,12 @@ pub(super) fn s128(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn u8(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn u8(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -223,11 +253,12 @@ pub(super) fn u8(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn u16(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn u16(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -247,11 +278,12 @@ pub(super) fn u16(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn u32(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn u32(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -271,11 +303,12 @@ pub(super) fn u32(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn u64(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn u64(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -295,11 +328,12 @@ pub(super) fn u64(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }
 
-pub(super) fn u128(parse_data: &mut ParseData) -> StdResult {
+pub(super) fn u128(parse_data: &mut ParseData) -> WIPResult {
     let mut array = Vec::new();
     while parse_data.last_char != ']' {
         match parse_data.next_non_whitespace_peek() {
@@ -319,6 +353,7 @@ pub(super) fn u128(parse_data: &mut ParseData) -> StdResult {
                 error: e.into()
             })
         }
+        parse_data.try_skip_comment();
     }
     Ok(array.into())
 }

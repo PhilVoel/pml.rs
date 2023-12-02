@@ -1,7 +1,14 @@
-use std::{collections::HashMap, io::Error as IoError, num::{ParseFloatError, ParseIntError}};
+//! A library for parsing and working with the PML language.
+//!
+//! PML is a language for storing complex data in a human-readable format.
+//! For more information, see the [PML specification](https://gist.github.com/PhilVoel/00a6acb11257d00a84451f9df4d5b340).
+
+use std::collections::HashMap;
 
 mod impls;
 pub mod parse;
+pub mod errors;
+pub use errors::{ParseError, ParseNumberError, GetError};
 
 mod elem {
     use crate::PmlStruct;
@@ -28,20 +35,21 @@ mod elem {
 
     #[derive(Debug, Clone)]
     pub enum ArrayElement {
-        AString(Vec<String>),
-        APmlStruct(Vec<PmlStruct>),
-        Af32(Vec<f32>),
-        Af64(Vec<f64>),
-        Ai8(Vec<i8>),
-        Ai16(Vec<i16>),
-        Ai32(Vec<i32>),
-        Ai64(Vec<i64>),
-        Ai128(Vec<i128>),
-        Au8(Vec<u8>),
-        Au16(Vec<u16>),
-        Au32(Vec<u32>),
-        Au64(Vec<u64>),
-        Au128(Vec<u128>),
+        PmlBool(Vec<bool>),
+        PmlStruct(Vec<PmlStruct>),
+        PmlString(Vec<String>),
+        PmlF32(Vec<f32>),
+        PmlF64(Vec<f64>),
+        PmlI8(Vec<i8>),
+        PmlI16(Vec<i16>),
+        PmlI32(Vec<i32>),
+        PmlI64(Vec<i64>),
+        PmlI128(Vec<i128>),
+        PmlU8(Vec<u8>),
+        PmlU16(Vec<u16>),
+        PmlU32(Vec<u32>),
+        PmlU64(Vec<u64>),
+        PmlU128(Vec<u128>),
     }
 }
 use elem::Element;
@@ -51,74 +59,64 @@ pub struct PmlStruct {
     elements: HashMap<String, Element>,
 }
 
-#[derive(Debug)]
-pub enum ParseNumberError {
-    Int(ParseIntError),
-    Float(ParseFloatError)
-}
-
-#[derive(Debug)]
-pub enum Error {
-    AlreadyExists {
-        key: String,
-    },
-    CircularDependency(Vec<String>),
-    FileAccess(IoError),
-    InvalidKey,
-    IllegalCharacter{
-        char: char,
-        line: u32,
-        col: u32
-    },
-    IllegalDependency,
-    NotAnExistingStruct(String),
-    ParseNumberError{
-        line: u32,
-        value: String,
-        error: ParseNumberError
-    },
-    UnexpectedEOF,
-    UnfulfilledDependency{
-        key: String,
-        dependency: String
-    },
-    UnknownForcedType{
-        key: String,
-        type_name: String
-    }
-}
-
-impl<'a> PmlStruct {
-    pub fn get<T>(&'a self, key: &str) -> Option<T>
+/// A container that holds key-value pairs of data.
+impl PmlStruct {
+    /// Returns the value of the element with the provided key.
+    ///
+    /// Takes a key to the element that should be returned. Returns the element as type `T` if the
+    /// conversion could be performed, or an error if one occured.
+    ///
+    /// # Errors
+    /// This function returns an error if the element does not exist, or if the element exists, but
+    /// could not be converted to the requested type.
+    pub fn get<'a, T>(&'a self, key: &str) -> Result<T, GetError>
         where
-        T: From<&'a Element>
+        T: TryFrom<&'a Element, Error = GetError>
         {
             match key.split_once('.') {
-                None => self.elements.get(key).map(|elem| T::from(elem)),
-                Some((first, rest)) => match self.elements.get(first)? {
-                    Element::PmlStruct(s) => s.get::<T>(rest),
-                    _ => None
+                None => match self.elements.get(key).map(|elem| T::try_from(elem)) {
+                    None => Err(GetError::DoesNotExits),
+                    Some(res) => res
+                }
+                Some((first, rest)) => match self.elements.get(first) {
+                    Some(Element::PmlStruct(s)) => s.get::<T>(rest),
+                    Some(_) => Err(GetError::InvalidType),
+                    None => Err(GetError::DoesNotExits)
                 }
             }
         }
 
-    pub fn add<T>(&mut self, key: String, elem: T) -> Result<(), Error>
+    /// Adds an element to the struct.
+    ///
+    /// Takes a key and a value that can be saved in a `PmlStruct`. Should the key point into
+    /// an unexisting struct, the struct will be created.
+    ///
+    /// # Errors
+    /// This function returns an error if the key is invalid, if the element already exists, or if
+    /// the key points into an existing element that is not a struct.
+    pub fn add<T>(&mut self, key: String, elem: T) -> Result<(), ParseError>
         where
         T: Into<Element>
         {
             if key.starts_with('.') || key.ends_with('.') || key.is_empty() {
-                return Err(Error::InvalidKey);
+                return Err(ParseError::InvalidKey);
             }
             match key.split_once('.') {
                 None => {
                     match self.elements.insert(key.clone(), elem.into()) {
-                        Some(_) => Err(Error::AlreadyExists{key}),
+                        Some(_) => Err(ParseError::AlreadyExists{key}),
                         None => Ok(())
                     }
                 }
                 Some((first, rest)) => match self.elements.get_mut(first) {
                     Some(Element::PmlStruct(s)) => s.add(String::from(rest), elem),
-                    _ => Err(Error::NotAnExistingStruct(String::from(first)))
+                    Some(_) => Err(ParseError::NotAStruct(String::from(first))),
+                    None => {
+                        let mut s = PmlStruct{elements: HashMap::new()};
+                        s.add(String::from(rest), elem)?;
+                        self.elements.insert(String::from(first), Element::PmlStruct(Box::new(s)));
+                        Ok(())
+                    }
                 }
             }
         }

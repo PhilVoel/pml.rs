@@ -1,9 +1,9 @@
-use crate::{Error, ParseNumberError};
+use crate::errors::{ParseError, ParseNumberError};
 use std::num::{ParseIntError, ParseFloatError};
 
-impl From<std::io::Error> for Error {
+impl From<std::io::Error> for ParseError {
     fn from(e: std::io::Error) -> Self {
-        Error::FileAccess(e)
+        ParseError::FileAccess(e)
     }
 }
 
