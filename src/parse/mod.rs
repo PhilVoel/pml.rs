@@ -2,6 +2,8 @@
 use std::fs;
 use crate::{PmlStruct, errors::ParseError as Error};
 
+mod tree;
+
 /// Parses a file to a [`PmlStruct`](crate::PmlStruct).
 ///
 /// Takes the path to a file, parses it, and returns a `PmlStruct` if the file could be parsed
