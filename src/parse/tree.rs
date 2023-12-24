@@ -1,5 +1,5 @@
 use crate::ParseError;
-use std::{str::Chars, collections::HashMap, rc::{Rc, Weak}};
+use std::{str::Chars, collections::HashMap, rc::{Rc, Weak}, iter::Peekable};
 
 pub struct ParseTree {
     root: Rc<Node>,
@@ -12,13 +12,21 @@ struct Node {
 }
 
 enum Content {
-    Value(String),
+    Value(ContentValue),
     Children(HashMap<String, Rc<Node>>),
 }
 
+#[derive(Default)]
+struct ContentValue {
+    value: String,
+    line: u32,
+    col: u32,
+}
+
+#[derive(PartialEq)]
 enum ParseStatus {
     Start,
-    MetaInfo,
+    ReturnAfterSemicolon,
     QuotedKey,
     UnquotedKey,
     AfterKey,
@@ -27,39 +35,82 @@ enum ParseStatus {
 }
 
 struct ParseState<'a> {
-    chars: Chars<'a>,
+    chars: Peekable<Chars<'a>>,
     line: u32,
     col: u32,
 }
 
-use ParseStatus::{Start, MetaInfo, QuotedKey, UnquotedKey, AfterKey, AfterEquals, Value};
+use ParseStatus::{Start, ReturnAfterSemicolon, QuotedKey, UnquotedKey, AfterKey, AfterEquals, Value};
 
 impl TryFrom<&str> for ParseTree {
     type Error = ParseError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let mut chars = value.chars();
+        let mut chars = value.chars().peekable();
         let mut line = 1;
         let mut col = 0;
+        let mut inside_meta = false;
+        let mut current = String::new();
+        let mut meta_info = Vec::new();
 
-
+        while let Some(char) = chars.peek() {
+            if *char == '\n' {
+                line += 1;
+                col = 1;
+            } else {
+                col += 1;
+            }
+            if inside_meta && *char == ';' {
+                inside_meta = false;
+                meta_info.push(current);
+                current = String::new();
+            }
+            else if inside_meta {
+                current.push(*char);
+            }
+            else if *char == '#' {
+                inside_meta = true;
+            }
+            else if !char.is_whitespace() {
+                break;
+            }
+            chars.next();
+        }
+        if inside_meta {
+            return Err(ParseError::UnexpectedEOF);
+        }
         let mut parse_state = ParseState {
             chars,
             line,
             col,
         };
-        let root = get_struct(&mut parse_state)?;
+        let root = get_struct(&mut parse_state, None)?;
         if let Some(char) = parse_state.chars.next() {
             return Err(ParseError::IllegalCharacter{char, line: parse_state.line, col: parse_state.col});
         }
+        Ok(ParseTree {
+            root,
+            meta_info,
+        })
     }
 }
 
-fn get_struct(parse_state: &mut ParseState) -> Result<Node, ParseError> {
+fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<Node>>) -> Result<Rc<Node>, ParseError> {
+    let struct_node = Rc::new(Node {
+        value: Content::Children(HashMap::new()),
+        parent
+    });
     let mut status = Start;
+    let mut elements = match &mut struct_node.value {
+        Content::Children(elements) => elements,
+        _ => unreachable!(),
+    };
     let mut current = String::new();
-    let mut meta_infos = Vec::new();
     let mut key = String::new();
+    let mut inside_string = false;
+    let mut escape_char = false;
+    let mut line_start = 0;
+    let mut col_start = 0;
     while let Some(char) = parse_state.chars.next() {
         if char == '\n' {
             parse_state.line += 1;
@@ -71,20 +122,17 @@ fn get_struct(parse_state: &mut ParseState) -> Result<Node, ParseError> {
         let col = parse_state.col;
         match status {
             Start if char.is_whitespace() => continue,
-            Start if char == '#' => status = MetaInfo,
             Start if char == '"' => status = QuotedKey,
+            Start if char == '}' => status = ReturnAfterSemicolon,
             Start if is_char_reserved(char) => return Err(ParseError::IllegalCharacter{char, line, col}),
             Start => {
                 current.push(char);
                 status = UnquotedKey;
             }
 
-            MetaInfo if char == ';' => {
-                meta_infos.push(current);
-                current = String::new();
-                status = Start;
-            }
-            MetaInfo => current.push(char),
+            ReturnAfterSemicolon if char.is_whitespace() => continue,
+            ReturnAfterSemicolon if char == ';' => return Ok(struct_node),
+            ReturnAfterSemicolon => return Err(ParseError::IllegalCharacter{char, line, col}),
 
             QuotedKey if char == '"' => {
                 key = current;
@@ -115,17 +163,44 @@ fn get_struct(parse_state: &mut ParseState) -> Result<Node, ParseError> {
             AfterEquals if char.is_whitespace() => continue,
             AfterEquals if char == ';' => return Err(ParseError::IllegalCharacter{char, line, col}),
             AfterEquals if char == '{' => {
-                todo!()
+                let node = get_struct(parse_state, Some(Rc::downgrade(&struct_node)))?;
+                elements.insert(key.clone(), node);
+                status = Start;
             }
             AfterEquals => {
+                line_start = parse_state.line;
+                col_start = parse_state.col;
                 current.push(char);
                 status = Value;
             }
 
-            Value => todo!(),
+            Value if inside_string && escape_char => {
+                current.push(char);
+                escape_char = false;
+            }
+            Value if inside_string && char == '\\' => escape_char = true,
+            Value if char == '"' => inside_string = !inside_string,
+            Value if char == ';' && !inside_string => {
+                elements.insert(key.clone(), Rc::new(Node {
+                    value: Content::Value(ContentValue {
+                        value: current,
+                        line: line_start,
+                        col: col_start,
+                    }),
+                    parent: Some(Rc::downgrade(&struct_node)),
+                }));
+                status = Start;
+                current = String::new();
+            }
+            Value => current.push(char),
         }
     }
-    Err(ParseError::UnexpectedEOF)
+    if status == Start {
+        Ok(struct_node)
+    }
+    else {
+        Err(ParseError::UnexpectedEOF)
+    }
 }
 
 fn is_char_reserved(char: char) -> bool {
