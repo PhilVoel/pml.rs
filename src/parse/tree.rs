@@ -1,22 +1,25 @@
 use crate::ParseError;
-use std::{str::Chars, collections::HashMap, rc::{Rc, Weak}, iter::Peekable};
+use std::{str::Chars, collections::HashMap, rc::{Rc, Weak}, iter::Peekable, cell::RefCell};
 
+#[derive(Debug)]
 pub struct ParseTree {
-    root: Rc<Node>,
+    root: Rc<RefCell<Node>>,
     meta_info: Vec<String>,
 }
 
+#[derive(Debug)]
 struct Node {
     value: Content,
-    parent: Option<Weak<Node>>,
+    parent: Option<Weak<RefCell<Node>>>,
 }
 
+#[derive(Debug)]
 enum Content {
     Value(ContentValue),
-    Children(HashMap<String, Rc<Node>>),
+    Children(HashMap<String, Rc<RefCell<Node>>>),
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct ContentValue {
     value: String,
     line: u32,
@@ -72,6 +75,7 @@ impl TryFrom<&str> for ParseTree {
                 inside_meta = true;
             }
             else if !char.is_whitespace() {
+                col -= 1;
                 break;
             }
             chars.next();
@@ -95,13 +99,14 @@ impl TryFrom<&str> for ParseTree {
     }
 }
 
-fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<Node>>) -> Result<Rc<Node>, ParseError> {
-    let struct_node = Rc::new(Node {
+fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<RefCell<Node>>>) -> Result<Rc<RefCell<Node>>, ParseError> {
+    let struct_node = Rc::new(RefCell::new(Node {
         value: Content::Children(HashMap::new()),
         parent
-    });
+    }));
     let mut status = Start;
-    let mut elements = match &mut struct_node.value {
+    let mut node = struct_node.borrow_mut();
+    let elements = match &mut node.value {
         Content::Children(elements) => elements,
         _ => unreachable!(),
     };
@@ -114,7 +119,7 @@ fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<Node>>) -> Resul
     while let Some(char) = parse_state.chars.next() {
         if char == '\n' {
             parse_state.line += 1;
-            parse_state.col = 1;
+            parse_state.col = 0;
         } else {
             parse_state.col += 1;
         }
@@ -131,7 +136,10 @@ fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<Node>>) -> Resul
             }
 
             ReturnAfterSemicolon if char.is_whitespace() => continue,
-            ReturnAfterSemicolon if char == ';' => return Ok(struct_node),
+            ReturnAfterSemicolon if char == ';' => {
+                drop(node);
+                return Ok(struct_node)
+            }
             ReturnAfterSemicolon => return Err(ParseError::IllegalCharacter{char, line, col}),
 
             QuotedKey if char == '"' => {
@@ -168,34 +176,43 @@ fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<Node>>) -> Resul
                 status = Start;
             }
             AfterEquals => {
-                line_start = parse_state.line;
-                col_start = parse_state.col;
+                line_start = line;
+                col_start = col;
                 current.push(char);
                 status = Value;
+                if char == '"' {
+                    inside_string = true;
+                }
             }
 
-            Value if inside_string && escape_char => {
-                current.push(char);
-                escape_char = false;
-            }
-            Value if inside_string && char == '\\' => escape_char = true,
-            Value if char == '"' => inside_string = !inside_string,
             Value if char == ';' && !inside_string => {
-                elements.insert(key.clone(), Rc::new(Node {
+                elements.insert(key.clone(), Rc::new(RefCell::new(Node {
                     value: Content::Value(ContentValue {
                         value: current,
                         line: line_start,
                         col: col_start,
                     }),
                     parent: Some(Rc::downgrade(&struct_node)),
-                }));
+                })));
                 status = Start;
                 current = String::new();
             }
-            Value => current.push(char),
+            Value => {
+                current.push(char);
+                if inside_string && escape_char {
+                    escape_char = false;
+                }
+                else if inside_string && char == '\\'  {
+                    escape_char = true;
+                }
+                else if char == '"' {
+                    inside_string = !inside_string;
+                }
+            }
         }
     }
     if status == Start {
+        drop(node);
         Ok(struct_node)
     }
     else {
