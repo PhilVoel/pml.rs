@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 
 mod impls;
+mod meta_info;
 pub mod parse;
 pub mod errors;
 pub use errors::{ParseError, ParseNumberError, GetError};

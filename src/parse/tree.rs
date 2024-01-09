@@ -1,10 +1,22 @@
-use crate::ParseError;
+use crate::{ParseError, meta_info::MetaInfo};
 use std::{str::Chars, collections::HashMap, rc::{Rc, Weak}, iter::Peekable, cell::RefCell};
 
 #[derive(Debug)]
 pub struct ParseTree {
     root: Rc<RefCell<Node>>,
-    meta_info: Vec<String>,
+    meta_info: Vec<MetaInfoState>,
+}
+
+#[derive(Debug)]
+enum MetaInfoState {
+    Raw(String),
+    Parsed(MetaInfo),
+}
+
+impl From<String> for MetaInfoState {
+    fn from(value: String) -> Self {
+        MetaInfoState::Raw(value)
+    }
 }
 
 #[derive(Debug)]
@@ -65,7 +77,7 @@ impl TryFrom<&str> for ParseTree {
             }
             if inside_meta && *char == ';' {
                 inside_meta = false;
-                meta_info.push(current);
+                meta_info.push(current.into());
                 current = String::new();
             }
             else if inside_meta {
@@ -96,6 +108,26 @@ impl TryFrom<&str> for ParseTree {
             root,
             meta_info,
         })
+    }
+}
+
+impl ParseTree {
+    pub fn parse_meta_info(&mut self) -> Result<&mut Self, ParseError> {
+        self.meta_info = self.meta_info.iter()
+            .map(|s| match s {
+                MetaInfoState::Raw(s) => MetaInfo::try_from(s.as_str()),
+                MetaInfoState::Parsed(_) => unreachable!(),
+            })
+            .collect::<Result<Vec<MetaInfo>, ParseError>>()?
+            .into_iter()
+            .map(|s| MetaInfoState::Parsed(s))
+            .collect();
+        Ok(self)
+    }
+
+    pub fn parse_values(&mut self) -> Result<&mut Self, ParseError> {
+        todo!();
+        Ok(self)
     }
 }
 

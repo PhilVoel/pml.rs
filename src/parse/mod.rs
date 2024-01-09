@@ -3,6 +3,7 @@ use std::fs;
 use crate::{PmlStruct, errors::ParseError as Error};
 
 mod tree;
+use tree::ParseTree;
 
 /// Parses a file to a [`PmlStruct`](crate::PmlStruct).
 ///
@@ -18,5 +19,6 @@ pub fn file(file: &str) -> Result<PmlStruct, Error> {
 }
 
 fn parse_pml_string(input: &str) -> Result<PmlStruct, Error> {
+    let mut tree = ParseTree::try_from(input)?.parse_meta_info()?;
     todo!()
 }
