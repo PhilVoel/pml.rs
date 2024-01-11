@@ -1,43 +1,27 @@
-use crate::ParseError;
-
 #[derive(Debug)]
 pub enum MetaInfo {
     Version(Version),
     Template(Template),
 }
 
-impl TryFrom<&str> for MetaInfo {
-    type Error = ParseError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        todo!()
+impl From<Version> for MetaInfo {
+    fn from(value: Version) -> Self {
+        MetaInfo::Version(value)
     }
 }
 
-#[derive(Debug)]
+impl From<Template> for MetaInfo {
+    fn from(value: Template) -> Self {
+        MetaInfo::Template(value)
+    }
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Version {
-    pub major: u32,
-    pub minor: u32,
-}
-
-impl TryFrom<&str> for Version {
-    type Error = ParseError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        todo!()
-    }
+    pub major: u8,
+    pub minor: u8,
 }
 
 #[derive(Debug)]
 pub struct Template {
-    pub name: String,
-    pub version: Version,
-}
-
-impl TryFrom<&str> for Template {
-    type Error = ParseError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        todo!()
-    }
 }

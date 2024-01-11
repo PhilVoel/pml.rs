@@ -1,22 +1,11 @@
-use crate::{ParseError, meta_info::MetaInfo};
+use crate::{ParseError, meta_info::{MetaInfo, Version, Template}};
 use std::{str::Chars, collections::HashMap, rc::{Rc, Weak}, iter::Peekable, cell::RefCell};
+use super::is_char_reserved;
 
 #[derive(Debug)]
 pub struct ParseTree {
     root: Rc<RefCell<Node>>,
-    meta_info: Vec<MetaInfoState>,
-}
-
-#[derive(Debug)]
-enum MetaInfoState {
-    Raw(String),
-    Parsed(MetaInfo),
-}
-
-impl From<String> for MetaInfoState {
-    fn from(value: String) -> Self {
-        MetaInfoState::Raw(value)
-    }
+    meta_info: Vec<MetaInfo>,
 }
 
 #[derive(Debug)]
@@ -28,7 +17,10 @@ struct Node {
 #[derive(Debug)]
 enum Content {
     Value(ContentValue),
-    Children(HashMap<String, Rc<RefCell<Node>>>),
+    Struct {
+        template: Option<String>,
+        children: HashMap<String, Rc<RefCell<Node>>>
+    },
 }
 
 #[derive(Debug, Default)]
@@ -38,35 +30,24 @@ struct ContentValue {
     col: u32,
 }
 
-#[derive(PartialEq)]
-enum ParseStatus {
-    Start,
-    ReturnAfterSemicolon,
-    QuotedKey,
-    UnquotedKey,
-    AfterKey,
-    AfterEquals,
-    Value,
-}
-
-struct ParseState<'a> {
-    chars: Peekable<Chars<'a>>,
-    line: u32,
-    col: u32,
-}
-
-use ParseStatus::{Start, ReturnAfterSemicolon, QuotedKey, UnquotedKey, AfterKey, AfterEquals, Value};
-
 impl TryFrom<&str> for ParseTree {
     type Error = ParseError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
+        #[derive(PartialEq)]
+        enum ParseStatus {
+            Start,
+            Descriptor,
+            SkipToNextLine
+        }
+        use ParseStatus::*;
+
         let mut chars = value.chars().peekable();
         let mut line = 1;
         let mut col = 0;
-        let mut inside_meta = false;
         let mut current = String::new();
         let mut meta_info = Vec::new();
+        let mut status = Start;
 
         while let Some(char) = chars.peek() {
             if *char == '\n' {
@@ -75,34 +56,36 @@ impl TryFrom<&str> for ParseTree {
             } else {
                 col += 1;
             }
-            if inside_meta && *char == ';' {
-                inside_meta = false;
-                meta_info.push(current.into());
-                current = String::new();
-            }
-            else if inside_meta {
-                current.push(*char);
-            }
-            else if *char == '#' {
-                inside_meta = true;
-            }
-            else if !char.is_whitespace() {
-                col -= 1;
-                break;
+            match status {
+                Start if char.is_whitespace() => (),
+                Start if *char == '#' => status = Descriptor,
+                Start => {
+                    col -= 1;
+                    break;
+                }
+
+                Descriptor if char.is_whitespace() => {
+                    match current.as_str() {
+                        "version" => meta_info.push(Version::parse(&mut chars, &mut line, &mut col)?.into()),
+                        "def" => meta_info.push(Template::parse(&mut chars, &mut line, &mut col)?.into()),
+                        _ => (),
+                    }
+                    status = SkipToNextLine;
+                },
+                Descriptor if is_char_reserved(*char) => return Err(ParseError::IllegalCharacter{char: *char, line, col}),
+                Descriptor => current.push(*char),
+
+                SkipToNextLine if *char == '\n' => status = Start,
+                SkipToNextLine => (),
             }
             chars.next();
         }
-        if inside_meta {
+        if status != Start && status != SkipToNextLine {
             return Err(ParseError::UnexpectedEOF);
         }
-        let mut parse_state = ParseState {
-            chars,
-            line,
-            col,
-        };
-        let root = get_struct(&mut parse_state, None)?;
-        if let Some(char) = parse_state.chars.next() {
-            return Err(ParseError::IllegalCharacter{char, line: parse_state.line, col: parse_state.col});
+        let root = get_struct(&mut chars, None, false, &mut line, &mut col)?;
+        if let Some(char) = chars.next() {
+            return Err(ParseError::IllegalCharacter{char, line, col});
         }
         Ok(ParseTree {
             root,
@@ -111,68 +94,103 @@ impl TryFrom<&str> for ParseTree {
     }
 }
 
-impl ParseTree {
-    pub fn parse_meta_info(&mut self) -> Result<&mut Self, ParseError> {
-        self.meta_info = self.meta_info.iter()
-            .map(|s| match s {
-                MetaInfoState::Raw(s) => MetaInfo::try_from(s.as_str()),
-                MetaInfoState::Parsed(_) => unreachable!(),
-            })
-            .collect::<Result<Vec<MetaInfo>, ParseError>>()?
-            .into_iter()
-            .map(|s| MetaInfoState::Parsed(s))
-            .collect();
-        Ok(self)
+fn get_struct(chars: &mut Peekable<Chars>, parent: Option<Weak<RefCell<Node>>>, get_template: bool, line: &mut u32, col: &mut u32) -> Result<Rc<RefCell<Node>>, ParseError> {
+    #[derive(PartialEq)]
+    enum ParseStatus {
+        Start,
+        ReturnAfterSemicolon,
+        QuotedKey,
+        UnquotedKey,
+        AfterKey,
+        AfterEquals,
+        Value,
+        Comment(Box<ParseStatus>),
     }
+    use ParseStatus::*;
 
-    pub fn parse_values(&mut self) -> Result<&mut Self, ParseError> {
-        todo!();
-        Ok(self)
-    }
-}
-
-fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<RefCell<Node>>>) -> Result<Rc<RefCell<Node>>, ParseError> {
     let struct_node = Rc::new(RefCell::new(Node {
-        value: Content::Children(HashMap::new()),
-        parent
+        parent,
+        value: Content::Struct{
+            children: HashMap::new(),
+            template: None,
+        },
     }));
     let mut status = Start;
-    let mut node = struct_node.borrow_mut();
-    let elements = match &mut node.value {
-        Content::Children(elements) => elements,
-        _ => unreachable!(),
-    };
     let mut current = String::new();
     let mut key = String::new();
     let mut inside_string = false;
     let mut escape_char = false;
     let mut line_start = 0;
     let mut col_start = 0;
-    while let Some(char) = parse_state.chars.next() {
-        if char == '\n' {
-            parse_state.line += 1;
-            parse_state.col = 0;
-        } else {
-            parse_state.col += 1;
+    if get_template {
+        let mut done = false;
+        let mut wait_for_curly_bracket = false;
+        while let Some(char) = chars.next() {
+            if char == '\n' {
+                *line += 1;
+                *col = 0;
+            } else {
+                *col += 1;
+            }
+            if done && char == ';' {
+                struct_node.borrow_mut().value = Content::Struct{
+                    children: HashMap::new(),
+                    template: Some(current),
+                };
+                return Ok(struct_node);
+            }
+            else if done && char == '+' {
+                struct_node.borrow_mut().value = Content::Struct{
+                    children: HashMap::new(),
+                    template: Some(current),
+                };
+                current = String::new();
+                wait_for_curly_bracket = true;
+            }
+            else if wait_for_curly_bracket && char == '{' {
+                break;
+            }
+            else if (done || wait_for_curly_bracket) && !char.is_whitespace() {
+                return Err(ParseError::IllegalCharacter{char, line: *line, col: *col});
+            }
+            else if char == ')' {
+                done = true;
+            }
+            else if !done && !wait_for_curly_bracket {
+                current.push(char);
+            }
         }
-        let line = parse_state.line;
-        let col = parse_state.col;
+    }
+    let mut node = struct_node.borrow_mut();
+    let elements = match &mut node.value {
+        Content::Struct{children: elements, ..} => elements,
+        _ => unreachable!(),
+    };
+    while let Some(char) = chars.next() {
+        if char == '\n' {
+            *line += 1;
+            *col = 0;
+        } else {
+            *col += 1;
+        }
         match status {
             Start if char.is_whitespace() => continue,
             Start if char == '"' => status = QuotedKey,
             Start if char == '}' => status = ReturnAfterSemicolon,
-            Start if is_char_reserved(char) => return Err(ParseError::IllegalCharacter{char, line, col}),
+            Start if char == '#' => status = Comment(Box::new(Start)),
+            Start if is_char_reserved(char) => return Err(ParseError::IllegalCharacter{char, line: *line, col: *col}),
             Start => {
                 current.push(char);
                 status = UnquotedKey;
             }
 
             ReturnAfterSemicolon if char.is_whitespace() => continue,
+            ReturnAfterSemicolon if char == '#' => status = Comment(Box::new(ReturnAfterSemicolon)),
             ReturnAfterSemicolon if char == ';' => {
                 drop(node);
                 return Ok(struct_node)
             }
-            ReturnAfterSemicolon => return Err(ParseError::IllegalCharacter{char, line, col}),
+            ReturnAfterSemicolon => return Err(ParseError::IllegalCharacter{char, line: *line, col: *col}),
 
             QuotedKey if char == '"' => {
                 key = current;
@@ -180,7 +198,7 @@ fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<RefCell<Node>>>)
                 status = AfterKey;
             }
             QuotedKey if char == ' ' => current.push(char),
-            QuotedKey if is_char_reserved(char) => return Err(ParseError::IllegalCharacter{char, line, col}),
+            QuotedKey if is_char_reserved(char) => return Err(ParseError::IllegalCharacter{char, line: *line, col: *col}),
             QuotedKey => current.push(char),
 
             UnquotedKey if char.is_whitespace() => {
@@ -193,23 +211,26 @@ fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<RefCell<Node>>>)
                 current = String::new();
                 status = AfterEquals;
             }
-            UnquotedKey if is_char_reserved(char) => return Err(ParseError::IllegalCharacter{char, line, col}),
+            UnquotedKey if char == '#' => status = Comment(Box::new(AfterKey)),
+            UnquotedKey if is_char_reserved(char) => return Err(ParseError::IllegalCharacter{char, line: *line, col: *col}),
             UnquotedKey => current.push(char),
 
             AfterKey if char.is_whitespace() => continue,
             AfterKey if char == '=' => status = AfterEquals,
-            AfterKey => return Err(ParseError::IllegalCharacter{char, line, col}),
+            AfterKey if char == '#' => status = Comment(Box::new(AfterKey)),
+            AfterKey => return Err(ParseError::IllegalCharacter{char, line: *line, col: *col}),
 
             AfterEquals if char.is_whitespace() => continue,
-            AfterEquals if char == ';' => return Err(ParseError::IllegalCharacter{char, line, col}),
-            AfterEquals if char == '{' => {
-                let node = get_struct(parse_state, Some(Rc::downgrade(&struct_node)))?;
+            AfterEquals if char == '#' => status = Comment(Box::new(AfterEquals)),
+            AfterEquals if char == ';' => return Err(ParseError::IllegalCharacter{char, line: *line, col: *col}),
+            AfterEquals if char == '{' || char == '(' => {
+                let node = get_struct(chars, Some(Rc::downgrade(&struct_node)), char == '(', line, col)?;
                 elements.insert(key.clone(), node);
                 status = Start;
             }
             AfterEquals => {
-                line_start = line;
-                col_start = col;
+                line_start = *line;
+                col_start = *col;
                 current.push(char);
                 status = Value;
                 if char == '"' {
@@ -229,6 +250,7 @@ fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<RefCell<Node>>>)
                 status = Start;
                 current = String::new();
             }
+            Value if char == '#' && !inside_string => status = Comment(Box::new(Value)),
             Value => {
                 current.push(char);
                 if inside_string && escape_char {
@@ -241,6 +263,8 @@ fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<RefCell<Node>>>)
                     inside_string = !inside_string;
                 }
             }
+            Comment(prev) if char == '\n' => status = *prev,
+            Comment(_) => (),
         }
     }
     if status == Start {
@@ -252,6 +276,8 @@ fn get_struct(parse_state: &mut ParseState, parent: Option<Weak<RefCell<Node>>>)
     }
 }
 
-fn is_char_reserved(char: char) -> bool {
-    ['=', ';', ',', '<', '>', '{', '}', '(', ')', '"', '[', ']', ':', '|', '.', '+', '$', '!', '?', '#'].contains(&char)
+impl ParseTree {
+    pub fn try_parse_strings(&mut self) -> Result<&mut Self, ParseError> {
+        todo!()
+    }
 }
